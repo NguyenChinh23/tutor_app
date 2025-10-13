@@ -4,31 +4,27 @@ import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 import 'presentation/provider/auth_provider.dart';
 import 'config/app_router.dart';
+import 'package:tutor_app/presentation/screens/common/splash_screen.dart';
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-  runApp(const MyApp());
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  runApp(const TutorApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class TutorApp extends StatelessWidget {
+  const TutorApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
-      ],
+    return ChangeNotifierProvider(
+      create: (_) => AppAuthProvider()..bootstrap(),
       child: MaterialApp(
-        title: 'Tutor Finder App',
-        theme: ThemeData(
-          primarySwatch: Colors.indigo,
-        ),
-        initialRoute: AppRouter.login,
+        debugShowCheckedModeBanner: false,
+        title: 'Tutor Finder',
         onGenerateRoute: AppRouter.generateRoute,
+        initialRoute: AppRouter.splash,
+        theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.blue),
       ),
     );
   }
