@@ -3,7 +3,7 @@ class UserModel {
   final String email;
   final String? displayName;
   final String? avatarUrl;
-  final String role; // "student" | "tutor" | "admin"
+  final String role;
   final bool isTutorVerified;
 
   UserModel({

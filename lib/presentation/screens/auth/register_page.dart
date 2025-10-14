@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:tutor_app/config/app_router.dart';
 import '../../provider/auth_provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:tutor_app/config/app_router.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -169,6 +171,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     try {
                       await auth.register(context, email, pass);
                       _showSnack("Đăng ký thành công 🎉");
+                      Navigator.of(context).pushNamed(AppRouter.login);
                     } on FirebaseAuthException catch (e) {
                       if (e.code == 'email-already-in-use') {
                         _showSnack("Email này đã được sử dụng!");

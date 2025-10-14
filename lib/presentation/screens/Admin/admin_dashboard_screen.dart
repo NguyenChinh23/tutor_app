@@ -4,44 +4,18 @@ import 'package:provider/provider.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../provider/auth_provider.dart';
 import '../../../config/app_router.dart';
+import '../../../config/theme.dart';
 
-class AdminDashboardScreen extends StatelessWidget {
+class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
 
-  Future<void> _confirmAction(
-      BuildContext context, {
-        required String title,
-        required String content,
-        required Future<void> Function() onConfirm,
-      }) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: Text(content),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Hủy'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
-            ),
-            child: const Text('Xác nhận'),
-          ),
-        ],
-      ),
-    );
+  @override
+  State<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
+}
 
-    if (confirmed == true) {
-      await onConfirm();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$title thành công! ✅')),
-      );
-    }
-  }
+class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
+  int _selectedIndex = 0;
+  final List<String> _statuses = ["pending", "approved", "rejected"];
 
   @override
   Widget build(BuildContext context) {
@@ -49,143 +23,113 @@ class AdminDashboardScreen extends StatelessWidget {
     final repo = AuthRepository();
     final reviewerUid = repo.currentUser?.uid ?? 'admin';
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('🛡️ Admin Dashboard - Duyệt Gia Sư'),
-        backgroundColor: Colors.blue,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Đăng xuất',
-            onPressed: () async {
-              await context.read<AppAuthProvider>().logout();
-              if (context.mounted) {
-                Navigator.pushNamedAndRemoveUntil(
-                  context,
-                  AppRouter.login,
-                      (route) => false,
-                );
-              }
-            },
-          ),
-        ],
-      ),
-      backgroundColor: const Color(0xFFF9FAFB),
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+    final List<Widget> pages = _statuses.map((status) {
+      return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: fs
             .collection('tutorApplications')
+            .where('status', isEqualTo: status)
             .orderBy('submittedAt', descending: true)
             .snapshots(),
-        builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-
-          if (snap.hasError) {
+          if (snapshot.hasError) {
             return Center(
-              child: Text(
-                'Lỗi tải dữ liệu: ${snap.error}',
-                style: const TextStyle(color: Colors.red),
-              ),
+              child: Text("Lỗi tải dữ liệu: ${snapshot.error}",
+                  style: const TextStyle(color: Colors.red)),
             );
           }
 
-          final docs = snap.data?.docs ?? [];
+          final docs = snapshot.data?.docs ?? [];
           if (docs.isEmpty) {
             return const Center(
               child: Text(
-                '📭 Chưa có hồ sơ gia sư nào đang chờ duyệt.',
-                style: TextStyle(fontSize: 16, color: Colors.grey),
+                "📭 Không có hồ sơ nào.",
+                style: TextStyle(color: Colors.grey),
               ),
             );
           }
 
-          return ListView.separated(
+          return ListView.builder(
             padding: const EdgeInsets.all(16),
             itemCount: docs.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
-            itemBuilder: (_, i) {
+            itemBuilder: (context, i) {
               final d = docs[i].data();
-              final uid = d['uid'] ?? '';
               final name = d['fullName'] ?? 'Chưa có tên';
               final subj = d['subject'] ?? 'Không rõ';
-              final status = d['status'] ?? 'pending';
+              final exp = d['experience'] ?? '0';
+              final desc = d['description'] ?? '';
+              final uid = d['uid'];
               final appId = docs[i].id;
 
-              final statusColor = switch (status) {
-                'approved' => Colors.green,
-                'rejected' => Colors.red,
-                _ => Colors.orange,
-              };
-
               return Card(
-                elevation: 3,
+                margin: const EdgeInsets.symmetric(vertical: 8),
+                elevation: 4,
+                color: Colors.white,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: ListTile(
-                  contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  title: Text(
-                    name,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                  subtitle: Text('📘 Môn: $subj\n📄 Trạng thái: $status',
-                      style: TextStyle(color: statusColor)),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
+                    borderRadius: BorderRadius.circular(12)),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (status != 'approved')
-                        ElevatedButton(
-                          onPressed: () => _confirmAction(
-                            context,
-                            title: 'Duyệt hồ sơ',
-                            content: 'Bạn có chắc muốn duyệt hồ sơ này?',
-                            onConfirm: () async {
-                              await repo.approveTutor(
-                                uid: uid,
-                                appId: appId,
-                                reviewerUid: reviewerUid,
-                              );
-                            },
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                          ),
-                          child: const Text('Duyệt'),
+                      Text(name,
+                          style: const TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 4),
+                      Text(" Môn dạy: $subj"),
+                      Text(" Kinh nghiệm: $exp năm"),
+                      if (desc.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(" Mô tả: $desc"),
                         ),
-                      const SizedBox(width: 8),
-                      if (status != 'rejected')
-                        ElevatedButton(
-                          onPressed: () => _confirmAction(
-                            context,
-                            title: 'Từ chối hồ sơ',
-                            content:
-                            'Bạn có chắc muốn từ chối hồ sơ này không?',
-                            onConfirm: () async {
-                              await fs
-                                  .collection('tutorApplications')
-                                  .doc(appId)
-                                  .set(
-                                {
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          if (status == 'pending') ...[
+                            ElevatedButton.icon(
+                              onPressed: () async {
+                                await _approveTutor(
+                                    uid, appId, reviewerUid, name);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                      content: Text("Duyệt thành công")),
+                                );
+                              },
+                              icon: const Icon(Icons.check),
+                              label: const Text("Duyệt"),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton.icon(
+                              onPressed: () async {
+                                await fs
+                                    .collection('tutorApplications')
+                                    .doc(appId)
+                                    .update({
                                   'status': 'rejected',
                                   'reviewedBy': reviewerUid,
                                   'reviewedAt': FieldValue.serverTimestamp(),
-                                },
-                                SetOptions(merge: true),
-                              );
-                            },
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red,
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                          ),
-                          child: const Text('Từ chối'),
-                        ),
+                                });
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                      content: Text(" Đã từ chối hồ sơ")),
+                                );
+                              },
+                              icon: const Icon(Icons.close),
+                              label: const Text("Từ chối"),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -193,7 +137,67 @@ class AdminDashboardScreen extends StatelessWidget {
             },
           );
         },
+      );
+    }).toList();
+
+    return Scaffold(
+      backgroundColor: AppTheme.backgroundColor,
+      appBar: AppBar(
+        title: const Text("️Admin Dashboard"),
+        backgroundColor: AppTheme.primaryColor,
+        actions: [
+          IconButton(
+            tooltip: "Đăng xuất",
+            icon: const Icon(Icons.logout, color: Colors.white),
+            onPressed: () async {
+              await context.read<AppAuthProvider>().logout();
+              if (context.mounted) {
+                Navigator.pushNamedAndRemoveUntil(
+                    context, AppRouter.login, (route) => false);
+              }
+            },
+          )
+        ],
+      ),
+      body: pages[_selectedIndex],
+
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _selectedIndex,
+        selectedItemColor: AppTheme.primaryColor,
+        unselectedItemColor: Colors.grey,
+        backgroundColor: Colors.white,
+        onTap: (index) => setState(() => _selectedIndex = index),
+        items: const [
+          BottomNavigationBarItem(
+              icon: Icon(Icons.pending_actions), label: "Chờ duyệt"),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.check_circle_outline), label: "Đã duyệt"),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.cancel_outlined), label: "Từ chối"),
+        ],
       ),
     );
+  }
+
+  /// ✅ Duyệt hồ sơ: cập nhật 2 nơi (users + tutorApplications)
+  Future<void> _approveTutor(
+      String uid, String appId, String reviewerUid, String name) async {
+    final fs = FirebaseFirestore.instance;
+    final batch = fs.batch();
+
+    final appRef = fs.collection('tutorApplications').doc(appId);
+    batch.update(appRef, {
+      'status': 'approved',
+      'reviewedBy': reviewerUid,
+      'reviewedAt': FieldValue.serverTimestamp(),
+    });
+
+    final userRef = fs.collection('users').doc(uid);
+    batch.update(userRef, {
+      'role': 'tutor',
+      'isTutorVerified': true,
+    });
+
+    await batch.commit();
   }
 }

@@ -129,7 +129,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     final email = emailController.text.trim();
                     final pass = passwordController.text.trim();
 
-                    // 🧠 Kiểm tra đầu vào
+                    // Kiểm tra đầu vào
                     if (email.isEmpty || pass.isEmpty) {
                       _showSnack("Vui lòng nhập đầy đủ thông tin!");
                       return;
@@ -144,10 +144,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     }
 
                     try {
-                      // 🧹 Clear session cũ để tránh lỗi token sau khi đổi mật khẩu
+                      // 🧹 Clear session cũ
                       await FirebaseAuth.instance.signOut();
 
-                      // 🧩 Thực hiện đăng nhập thật
                       await auth.login(context, email, pass);
                     } on FirebaseAuthException catch (e) {
                       if (e.code == 'wrong-password') {

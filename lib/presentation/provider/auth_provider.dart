@@ -22,7 +22,7 @@ class AppAuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ✅ Lắng nghe trạng thái đăng nhập Firebase
+  // ✅ Lắng nghe trạng thái đăng nhập Firebase + user Firestore realtime
   void bootstrap() {
     _repo.authChanges.listen((fbUser) async {
       if (fbUser == null) {
@@ -32,12 +32,19 @@ class AppAuthProvider extends ChangeNotifier {
       }
 
       try {
-        _adminUid ??= await _config.fetchAdminUid();
+        // ⚠️ Chỉ đọc config nếu user là admin (tránh lỗi permission)
+        if (fbUser.uid == "eYngCmflUZQ2p2k9XfvctEvyOWP2") {
+          _adminUid ??= await _config.fetchAdminUid();
+        }
 
-        // 🔁 Lắng nghe dữ liệu user Firestore realtime
+        // 🔁 Lắng nghe realtime document user trong Firestore
         _repo.userDocStream(fbUser.uid).listen((u) {
           _user = u;
           notifyListeners();
+
+          if (u != null) {
+            _navigateAfterLogin(u);
+          }
         });
       } catch (e) {
         debugPrint("Bootstrap error: $e");
@@ -45,34 +52,59 @@ class AppAuthProvider extends ChangeNotifier {
     });
   }
 
-  // ✅ Đăng nhập bằng Email + Password
+  // ✅ Điều hướng theo vai trò và trạng thái duyệt
+  void _navigateAfterLogin(UserModel u) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = navigatorKey.currentContext;
+      if (ctx == null) return;
+
+      // 🧩 Admin
+      if (u.uid == "eYngCmflUZQ2p2k9XfvctEvyOWP2" || u.role == 'admin') {
+        Navigator.pushReplacementNamed(ctx, AppRouter.admin);
+      }
+      // 🧩 Tutor
+      else if (u.role == 'tutor') {
+        if (u.isTutorVerified == true) {
+          Navigator.pushReplacementNamed(ctx, AppRouter.tutorHome);
+        } else {
+          // ⚙️ Chưa được duyệt → vẫn dùng studentHome
+          Navigator.pushReplacementNamed(ctx, AppRouter.studentHome);
+        }
+      }
+      // 🧩 Student
+      else {
+        Navigator.pushReplacementNamed(ctx, AppRouter.studentHome);
+      }
+    });
+  }
+
+  // ✅ Đăng nhập Email & Password
   Future<void> login(BuildContext context, String email, String password) async {
     _setLoading(true);
     try {
       final user = await _repo.login(email, password);
+      if (user == null) throw Exception("Không thể đăng nhập");
+
       _user = user;
       notifyListeners();
 
-      if (user != null) {
-        //  Lấy admin UID từ Firestore (nếu chưa có)
-        _adminUid ??= await _config.fetchAdminUid();
+      // ✅ Admin
+      if (user.uid == "eYngCmflUZQ2p2k9XfvctEvyOWP2") {
+        Navigator.pushReplacementNamed(context, AppRouter.admin);
+        return;
+      }
 
-        //  Nếu trùng UID admin → điều hướng admin
-        if (user.uid == _adminUid) {
-          Navigator.pushReplacementNamed(context, AppRouter.admin);
-          return;
-        }
-
-        //  Nếu không → điều hướng theo role
-        if (user.role == 'student') {
-          Navigator.pushReplacementNamed(context, AppRouter.studentHome);
-        } else if (user.role == 'tutor') {
+      // ✅ Tutor → kiểm tra duyệt
+      if (user.role == 'tutor') {
+        if (user.isTutorVerified == true) {
           Navigator.pushReplacementNamed(context, AppRouter.tutorHome);
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Không xác định được vai trò người dùng')),
-          );
+          Navigator.pushReplacementNamed(context, AppRouter.studentHome);
         }
+      }
+      // ✅ Student
+      else {
+        Navigator.pushReplacementNamed(context, AppRouter.studentHome);
       }
     } catch (e) {
       debugPrint("Login error: $e");
@@ -89,18 +121,12 @@ class AppAuthProvider extends ChangeNotifier {
     _setLoading(true);
     try {
       final user = await _repo.loginWithGoogle();
+      if (user == null) throw Exception("Đăng nhập Google thất bại");
+
       _user = user;
       notifyListeners();
 
-      if (user != null) {
-        if (user.role == 'student') {
-          Navigator.pushReplacementNamed(context, AppRouter.studentHome);
-        } else if (user.role == 'tutor') {
-          Navigator.pushReplacementNamed(context, AppRouter.tutorHome);
-        } else if (user.role == 'admin') {
-          Navigator.pushReplacementNamed(context, AppRouter.admin);
-        }
-      }
+      _navigateAfterLogin(user);
     } catch (e) {
       debugPrint("Google login error: $e");
       ScaffoldMessenger.of(context).showSnackBar(
@@ -111,7 +137,7 @@ class AppAuthProvider extends ChangeNotifier {
     }
   }
 
-  //  Đăng ký tài khoản
+  //  Đăng ký tài khoản → quay về trang đăng nhập
   Future<void> register(BuildContext context, String email, String password) async {
     _setLoading(true);
     try {
@@ -119,8 +145,11 @@ class AppAuthProvider extends ChangeNotifier {
       _user = user;
       notifyListeners();
 
-      // Sau khi đăng ký → chuyển đến StudentHome
-      Navigator.pushReplacementNamed(context, AppRouter.studentHome);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Đăng ký thành công 🎉 Vui lòng đăng nhập!")),
+      );
+
+      Navigator.pushReplacementNamed(context, AppRouter.login);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Lỗi đăng ký: $e")),
@@ -130,7 +159,7 @@ class AppAuthProvider extends ChangeNotifier {
     }
   }
 
-  //  Quên mật khẩu
+  // ✅ Đặt lại mật khẩu
   Future<void> resetPassword(String email) async {
     _setLoading(true);
     try {
@@ -143,10 +172,13 @@ class AppAuthProvider extends ChangeNotifier {
     }
   }
 
-  // 11 Đăng xuất
+  // ✅ Đăng xuất
   Future<void> logout() async {
     await _repo.logout();
     _user = null;
     notifyListeners();
   }
 }
+
+// ✅ Thêm global navigatorKey để Provider có thể điều hướng
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
