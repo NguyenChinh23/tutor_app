@@ -7,6 +7,7 @@ import 'package:tutor_app/presentation/screens/admin/admin_dashboard_screen.dart
 import 'package:tutor_app/presentation/screens/student/student_home.dart';
 import 'package:tutor_app/presentation/screens/tutor/tutor_home.dart';
 import 'package:tutor_app/presentation/screens/profile/apply_tutor_screen.dart';
+import '../presentation/screens/profile/edit_profile_screen.dart';
 
 class AppRouter {
   static const String splash = '/';
@@ -17,6 +18,7 @@ class AppRouter {
   static const String tutorHome = '/tutor-home';
   static const String applyTutor = '/apply-tutor';
   static const String admin = '/admin';
+  static const String editProfile = '/edit-profile';
 
   static Route<dynamic> generateRoute(RouteSettings settings) {
     switch (settings.name) {
@@ -30,6 +32,8 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const ForgotPasswordScreen());
       case studentHome:
         return MaterialPageRoute(builder: (_) => const StudentHomeScreen());
+      case editProfile:
+        return MaterialPageRoute(builder: (_) => const EditProfileScreen());
       case tutorHome:
         return MaterialPageRoute(builder: (_) => const TutorHomeScreen());
       case applyTutor:

@@ -22,7 +22,7 @@ class AppAuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ✅ Lắng nghe trạng thái đăng nhập Firebase + user Firestore realtime
+  //  Khởi động: lắng nghe trạng thái đăng nhập + user Firestore realtime
   void bootstrap() {
     _repo.authChanges.listen((fbUser) async {
       if (fbUser == null) {
@@ -32,12 +32,12 @@ class AppAuthProvider extends ChangeNotifier {
       }
 
       try {
-        // ⚠️ Chỉ đọc config nếu user là admin (tránh lỗi permission)
+        //Nếu là admin → lấy config
         if (fbUser.uid == "eYngCmflUZQ2p2k9XfvctEvyOWP2") {
           _adminUid ??= await _config.fetchAdminUid();
         }
 
-        // 🔁 Lắng nghe realtime document user trong Firestore
+        //  Lắng nghe user realtime trong Firestore
         _repo.userDocStream(fbUser.uid).listen((u) {
           _user = u;
           notifyListeners();
@@ -52,33 +52,27 @@ class AppAuthProvider extends ChangeNotifier {
     });
   }
 
-  // ✅ Điều hướng theo vai trò và trạng thái duyệt
+  //  Điều hướng theo vai trò
   void _navigateAfterLogin(UserModel u) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final ctx = navigatorKey.currentContext;
       if (ctx == null) return;
 
-      // 🧩 Admin
       if (u.uid == "eYngCmflUZQ2p2k9XfvctEvyOWP2" || u.role == 'admin') {
         Navigator.pushReplacementNamed(ctx, AppRouter.admin);
-      }
-      // 🧩 Tutor
-      else if (u.role == 'tutor') {
+      } else if (u.role == 'tutor') {
         if (u.isTutorVerified == true) {
           Navigator.pushReplacementNamed(ctx, AppRouter.tutorHome);
         } else {
-          // ⚙️ Chưa được duyệt → vẫn dùng studentHome
           Navigator.pushReplacementNamed(ctx, AppRouter.studentHome);
         }
-      }
-      // 🧩 Student
-      else {
+      } else {
         Navigator.pushReplacementNamed(ctx, AppRouter.studentHome);
       }
     });
   }
 
-  // ✅ Đăng nhập Email & Password
+  //  Đăng nhập Email & Password
   Future<void> login(BuildContext context, String email, String password) async {
     _setLoading(true);
     try {
@@ -88,22 +82,18 @@ class AppAuthProvider extends ChangeNotifier {
       _user = user;
       notifyListeners();
 
-      // ✅ Admin
       if (user.uid == "eYngCmflUZQ2p2k9XfvctEvyOWP2") {
         Navigator.pushReplacementNamed(context, AppRouter.admin);
         return;
       }
 
-      // ✅ Tutor → kiểm tra duyệt
       if (user.role == 'tutor') {
         if (user.isTutorVerified == true) {
           Navigator.pushReplacementNamed(context, AppRouter.tutorHome);
         } else {
           Navigator.pushReplacementNamed(context, AppRouter.studentHome);
         }
-      }
-      // ✅ Student
-      else {
+      } else {
         Navigator.pushReplacementNamed(context, AppRouter.studentHome);
       }
     } catch (e) {
@@ -125,7 +115,6 @@ class AppAuthProvider extends ChangeNotifier {
 
       _user = user;
       notifyListeners();
-
       _navigateAfterLogin(user);
     } catch (e) {
       debugPrint("Google login error: $e");
@@ -137,7 +126,7 @@ class AppAuthProvider extends ChangeNotifier {
     }
   }
 
-  //  Đăng ký tài khoản → quay về trang đăng nhập
+  //  Đăng ký tài khoản → quay lại login
   Future<void> register(BuildContext context, String email, String password) async {
     _setLoading(true);
     try {
@@ -159,7 +148,7 @@ class AppAuthProvider extends ChangeNotifier {
     }
   }
 
-  // ✅ Đặt lại mật khẩu
+  //  Quên mật khẩu
   Future<void> resetPassword(String email) async {
     _setLoading(true);
     try {
@@ -172,13 +161,26 @@ class AppAuthProvider extends ChangeNotifier {
     }
   }
 
-  // ✅ Đăng xuất
+  //  Đăng xuất
   Future<void> logout() async {
     await _repo.logout();
     _user = null;
     notifyListeners();
   }
+
+  // cập nhật hồ sơ người dùng
+  Future<void> updateProfile(String name, String goal) async {
+    if (_user == null) return;
+    try {
+      await _repo.updateUserProfile(_user!.uid, name, goal);
+      _user = _user!.copyWith(displayName: name, goal: goal);
+      notifyListeners();
+    } catch (e) {
+      debugPrint("Update profile error: $e");
+      rethrow;
+    }
+  }
 }
 
-// ✅ Thêm global navigatorKey để Provider có thể điều hướng
+// Biến global cho điều hướng (Navigator)
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();

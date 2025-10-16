@@ -11,7 +11,7 @@ class AdminProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// ✅ Duyệt hồ sơ gia sư
+  /// Duyệt hồ sơ gia sư
   Future<void> approveTutor({
     required String uid,
     required String appId,
@@ -21,14 +21,14 @@ class AdminProvider extends ChangeNotifier {
     try {
       await _repo.approveTutor(uid: uid, appId: appId, reviewerUid: reviewerUid);
     } catch (e) {
-      debugPrint("❌ Lỗi duyệt hồ sơ: $e");
+      debugPrint(" Lỗi duyệt hồ sơ: $e");
       rethrow;
     } finally {
       _setLoading(false);
     }
   }
 
-  /// ❌ Từ chối hồ sơ
+  /// Từ chối hồ sơ
   Future<void> rejectTutor({
     required String appId,
     required String reviewerUid,

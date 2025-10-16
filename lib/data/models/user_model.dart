@@ -5,6 +5,7 @@ class UserModel {
   final String? avatarUrl;
   final String role;
   final bool isTutorVerified;
+  final String? goal;
 
   UserModel({
     required this.uid,
@@ -13,23 +14,46 @@ class UserModel {
     this.avatarUrl,
     required this.role,
     required this.isTutorVerified,
+    this.goal,
   });
 
-  Map<String, dynamic> toMap() => {
-    'uid': uid,
-    'email': email,
-    'displayName': displayName,
-    'avatarUrl': avatarUrl,
-    'role': role,
-    'isTutorVerified': isTutorVerified,
-  };
+  factory UserModel.fromMap(Map<String, dynamic> data) {
+    return UserModel(
+      uid: data['uid'],
+      email: data['email'],
+      displayName: data['displayName'],
+      avatarUrl: data['avatarUrl'],
+      role: data['role'] ?? 'student',
+      isTutorVerified: data['isTutorVerified'] ?? false,
+      goal: data['goal'],
+    );
+  }
 
-  factory UserModel.fromMap(Map<String, dynamic> map) => UserModel(
-    uid: map['uid'] ?? '',
-    email: map['email'] ?? '',
-    displayName: map['displayName'],
-    avatarUrl: map['avatarUrl'],
-    role: map['role'] ?? 'student',
-    isTutorVerified: map['isTutorVerified'] ?? false,
-  );
+  Map<String, dynamic> toMap() {
+    return {
+      'uid': uid,
+      'email': email,
+      'displayName': displayName,
+      'avatarUrl': avatarUrl,
+      'role': role,
+      'isTutorVerified': isTutorVerified,
+      'goal': goal,
+    };
+  }
+
+  UserModel copyWith({
+    String? displayName,
+    String? avatarUrl,
+    String? goal,
+  }) {
+    return UserModel(
+      uid: uid,
+      email: email,
+      displayName: displayName ?? this.displayName,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
+      role: role,
+      isTutorVerified: isTutorVerified,
+      goal: goal ?? this.goal,
+    );
+  }
 }

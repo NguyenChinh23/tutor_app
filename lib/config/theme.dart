@@ -21,7 +21,6 @@ class AppTheme {
       ),
     ),
 
-    // ✅ Đổi sang CardThemeData
     cardTheme: CardThemeData(
       color: Colors.white,
       elevation: 3,
