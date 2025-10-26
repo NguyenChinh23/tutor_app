@@ -22,7 +22,7 @@ class AppAuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  //  Khởi động: lắng nghe trạng thái đăng nhập + user Firestore realtime
+  // 🔹 Lắng nghe trạng thái đăng nhập Firebase
   void bootstrap() {
     _repo.authChanges.listen((fbUser) async {
       if (fbUser == null) {
@@ -32,17 +32,17 @@ class AppAuthProvider extends ChangeNotifier {
       }
 
       try {
-        //Nếu là admin → lấy config
         if (fbUser.uid == "eYngCmflUZQ2p2k9XfvctEvyOWP2") {
           _adminUid ??= await _config.fetchAdminUid();
         }
 
-        //  Lắng nghe user realtime trong Firestore
+        // 🔹 Lắng nghe thông tin user realtime
         _repo.userDocStream(fbUser.uid).listen((u) {
           _user = u;
           notifyListeners();
 
-          if (u != null) {
+          //  Chỉ điều hướng khi login, không khi register
+          if (u != null && !_justRegistered) {
             _navigateAfterLogin(u);
           }
         });
@@ -52,13 +52,16 @@ class AppAuthProvider extends ChangeNotifier {
     });
   }
 
-  //  Điều hướng theo vai trò
+  bool _justRegistered = false; // tránh redirect sau khi đăng ký
+
+  // 🔹 Điều hướng theo vai trò
   void _navigateAfterLogin(UserModel u) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final ctx = navigatorKey.currentContext;
       if (ctx == null) return;
 
-      if (u.uid == "eYngCmflUZQ2p2k9XfvctEvyOWP2" || u.role == 'admin') {
+      if (u.role == 'admin' ||
+          u.uid == "eYngCmflUZQ2p2k9XfvctEvyOWP2") {
         Navigator.pushReplacementNamed(ctx, AppRouter.admin);
       } else if (u.role == 'tutor') {
         if (u.isTutorVerified == true) {
@@ -72,30 +75,15 @@ class AppAuthProvider extends ChangeNotifier {
     });
   }
 
-  //  Đăng nhập Email & Password
+  // 🔹 Đăng nhập Email & Password
   Future<void> login(BuildContext context, String email, String password) async {
     _setLoading(true);
     try {
       final user = await _repo.login(email, password);
       if (user == null) throw Exception("Không thể đăng nhập");
-
       _user = user;
       notifyListeners();
-
-      if (user.uid == "eYngCmflUZQ2p2k9XfvctEvyOWP2") {
-        Navigator.pushReplacementNamed(context, AppRouter.admin);
-        return;
-      }
-
-      if (user.role == 'tutor') {
-        if (user.isTutorVerified == true) {
-          Navigator.pushReplacementNamed(context, AppRouter.tutorHome);
-        } else {
-          Navigator.pushReplacementNamed(context, AppRouter.studentHome);
-        }
-      } else {
-        Navigator.pushReplacementNamed(context, AppRouter.studentHome);
-      }
+      _navigateAfterLogin(user);
     } catch (e) {
       debugPrint("Login error: $e");
       ScaffoldMessenger.of(context).showSnackBar(
@@ -105,8 +93,7 @@ class AppAuthProvider extends ChangeNotifier {
       _setLoading(false);
     }
   }
-
-  //  Đăng nhập Google
+  // 🔹 Đăng nhập bằng Google
   Future<void> loginWithGoogle(BuildContext context) async {
     _setLoading(true);
     try {
@@ -126,13 +113,19 @@ class AppAuthProvider extends ChangeNotifier {
     }
   }
 
-  //  Đăng ký tài khoản → quay lại login
+
+  // 🔹 Đăng ký tài khoản → quay lại login
   Future<void> register(BuildContext context, String email, String password) async {
     _setLoading(true);
+    _justRegistered = true;
     try {
       final user = await _repo.register(email, password);
       _user = user;
       notifyListeners();
+
+      //  Đăng xuất ngay để tránh auto-login
+      await _repo.logout();
+      _user = null;
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Đăng ký thành công 🎉 Vui lòng đăng nhập!")),
@@ -145,30 +138,28 @@ class AppAuthProvider extends ChangeNotifier {
       );
     } finally {
       _setLoading(false);
+      _justRegistered = false;
     }
   }
 
-  //  Quên mật khẩu
-  Future<void> resetPassword(String email) async {
-    _setLoading(true);
-    try {
-      await _repo.resetPassword(email);
-    } catch (e) {
-      debugPrint("Reset password error: $e");
-      rethrow;
-    } finally {
-      _setLoading(false);
-    }
-  }
-
-  //  Đăng xuất
+  // 🔹 Đăng xuất
   Future<void> logout() async {
     await _repo.logout();
     _user = null;
     notifyListeners();
   }
 
-  // cập nhật hồ sơ người dùng
+  // 🔹 Quên mật khẩu
+  Future<void> resetPassword(String email) async {
+    _setLoading(true);
+    try {
+      await _repo.resetPassword(email);
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  // 🔹 Cập nhật hồ sơ
   Future<void> updateProfile(String name, String goal) async {
     if (_user == null) return;
     try {
@@ -182,5 +173,5 @@ class AppAuthProvider extends ChangeNotifier {
   }
 }
 
-// Biến global cho điều hướng (Navigator)
+// 🌍 Biến global Navigator
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();

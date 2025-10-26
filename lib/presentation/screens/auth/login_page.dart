@@ -200,7 +200,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       : () async {
                     try {
                       await auth.loginWithGoogle(context);
-                      _showSnack("Đăng nhập Google thành công ✅");
+                      _showSnack("Đăng nhập Google thành công");
                     } catch (e) {
                       _showSnack("Lỗi: $e");
                     }

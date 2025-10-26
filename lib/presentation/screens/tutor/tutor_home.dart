@@ -41,7 +41,7 @@ class TutorHomeScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 👋 Chào gia sư
+
             Text(
               "Xin chào, ${user?.displayName ?? 'Gia sư'} 👋",
               style: const TextStyle(

@@ -37,7 +37,7 @@ class AdminProvider extends ChangeNotifier {
     try {
       await _repo.rejectTutor(appId: appId, reviewerUid: reviewerUid);
     } catch (e) {
-      debugPrint("❌ Lỗi từ chối hồ sơ: $e");
+      debugPrint(" Lỗi từ chối hồ sơ: $e");
       rethrow;
     } finally {
       _setLoading(false);

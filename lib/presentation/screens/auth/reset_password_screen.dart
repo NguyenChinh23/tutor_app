@@ -94,7 +94,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       : () async {
                     final email = emailController.text.trim();
 
-                    // 🧩 Kiểm tra đầu vào
+                    //  Kiểm tra đầu vào
                     if (email.isEmpty || !email.contains('@')) {
                       _showSnack("Vui lòng nhập email hợp lệ!");
                       return;

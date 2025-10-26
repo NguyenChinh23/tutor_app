@@ -37,7 +37,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               radius: 18,
               backgroundImage: widget.avatarUrl.isNotEmpty
                   ? NetworkImage(widget.avatarUrl)
-                  : const AssetImage('assets/images/avatar.png')
+                  : const AssetImage('assets/tutor1.png')
               as ImageProvider,
             ),
             const SizedBox(width: 10),

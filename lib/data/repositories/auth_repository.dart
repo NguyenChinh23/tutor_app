@@ -1,8 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 import 'package:tutor_app/data/models/user_model.dart';
 import 'package:tutor_app/data/services/auth_service.dart';
-import 'package:flutter/material.dart';
 
 class AuthRepository {
   final _fs = FirebaseFirestore.instance;
@@ -11,7 +11,7 @@ class AuthRepository {
   CollectionReference<Map<String, dynamic>> get _users => _fs.collection('users');
   CollectionReference<Map<String, dynamic>> get _tutorApps => _fs.collection('tutorApplications');
 
-  //  Đăng ký email → mặc định role student
+  // 🔹 Đăng ký email → mặc định role student
   Future<UserModel?> register(String email, String password) async {
     final user = await _auth.signUp(email, password);
     if (user == null) return null;
@@ -26,32 +26,33 @@ class AuthRepository {
     );
 
     await _users.doc(user.uid).set(newUser.toMap(), SetOptions(merge: true));
+    debugPrint(" Đăng ký thành công và lưu user vào Firestore");
     return newUser;
   }
 
-  //  Đăng nhập Email
+  // 🔹 Đăng nhập Email
   Future<UserModel?> login(String email, String password) async {
     final user = await _auth.signIn(email, password);
     if (user == null) return null;
     return _fetchOrCreateStudent(user);
   }
 
-  //  Đăng nhập Google
+  // 🔹 Đăng nhập Google
   Future<UserModel?> loginWithGoogle() async {
     final user = await _auth.signInWithGoogle();
     if (user == null) return null;
     return _fetchOrCreateStudent(user);
   }
 
-  //  Reset password
+  // 🔹 Reset password
   Future<void> resetPassword(String email) async {
     await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
   }
 
-  //  Đăng xuất
+  // 🔹 Đăng xuất
   Future<void> logout() => _auth.signOut();
 
-  //  Stream user Firestore realtime
+  // 🔹 Stream user Firestore realtime
   Stream<UserModel?> userDocStream(String uid) {
     return _users.doc(uid).snapshots().map((snap) {
       if (!snap.exists) return null;
@@ -59,18 +60,22 @@ class AuthRepository {
     });
   }
 
-  //  Apply làm gia sư
+
+  // 🔹 APPLY TRỞ THÀNH GIA SƯ
+
   Future<void> applyTutor({
     required String uid,
     required String email,
     required String fullName,
     required String subject,
     required String experience,
+    required String description,
+    required double price,
     String? certificateUrl,
-    String? description,
-    double? price,
+    String? avatarUrl,
   }) async {
     final appId = _tutorApps.doc().id;
+
     await _tutorApps.doc(appId).set({
       'id': appId,
       'uid': uid,
@@ -78,22 +83,25 @@ class AuthRepository {
       'fullName': fullName,
       'subject': subject,
       'experience': experience,
-      'certificateUrl': certificateUrl,
       'description': description,
-      'price': price ?? 0,
+      'price': price,
+      'certificateUrl': certificateUrl ?? '',
+      'avatarUrl': avatarUrl ?? '',
       'status': 'pending',
       'submittedAt': FieldValue.serverTimestamp(),
       'reviewedBy': null,
     });
 
-    // Cập nhật trạng thái user tạm thời
     await _users.doc(uid).set({
       'role': 'tutor',
       'isTutorVerified': false,
     }, SetOptions(merge: true));
+
+    debugPrint(" Hồ sơ gia sư của $email đã gửi lên Firestore (pending)");
   }
 
-  //  Admin: duyệt hồ sơ tutor → đồng bộ dữ liệu sang users
+  // 🔹 ADMIN DUYỆT GIA SƯ
+
   Future<void> approveTutor({
     required String uid,
     required String appId,
@@ -103,7 +111,7 @@ class AuthRepository {
     final userRef = _users.doc(uid);
 
     final appSnap = await appRef.get();
-    if (!appSnap.exists) throw Exception("Hồ sơ ứng tuyển không tồn tại");
+    if (!appSnap.exists) throw Exception(" Hồ sơ ứng tuyển không tồn tại");
     final appData = appSnap.data()!;
 
     final batch = _fs.batch();
@@ -115,24 +123,25 @@ class AuthRepository {
       'reviewedAt': FieldValue.serverTimestamp(),
     });
 
-    //  Đồng bộ dữ liệu sang users
+    // Đồng bộ dữ liệu sang users
     batch.update(userRef, {
       'role': 'tutor',
       'isTutorVerified': true,
-      'fullName': appData['fullName'] ?? '',
+      'displayName': appData['fullName'] ?? '',
       'subject': appData['subject'] ?? '',
       'price': (appData['price'] ?? 0).toDouble(),
       'experience': appData['experience'] ?? '',
       'bio': appData['description'] ?? '',
       'certificateUrl': appData['certificateUrl'] ?? '',
-      'rating': appData['rating'] ?? 0.0,
+      'avatarUrl': appData['avatarUrl'] ?? '',
+      'rating': (appData['rating'] ?? 0.0).toDouble(),
     });
 
     await batch.commit();
-    debugPrint(" Hồ sơ tutor của $uid đã được duyệt và đồng bộ sang users");
+    debugPrint(" Hồ sơ tutor của $uid đã được duyệt & đồng bộ sang users");
   }
 
-  //  Admin: từ chối hồ sơ tutor
+  // 🔹 ADMIN TỪ CHỐI HỒ SƠ
   Future<void> rejectTutor({
     required String appId,
     required String reviewerUid,
@@ -142,9 +151,12 @@ class AuthRepository {
       'reviewedBy': reviewerUid,
       'reviewedAt': FieldValue.serverTimestamp(),
     });
+    debugPrint("🚫 Hồ sơ $appId đã bị từ chối");
   }
 
-  //  Nếu chưa có user → tạo mới mặc định student
+
+  //  FETCH HOẶC TẠO USER (khi login lần đầu)
+
   Future<UserModel?> _fetchOrCreateStudent(User user) async {
     final doc = await _users.doc(user.uid).get();
     if (doc.exists) return UserModel.fromMap(doc.data()!);
@@ -161,16 +173,17 @@ class AuthRepository {
     await _users.doc(user.uid).set(newUser.toMap());
     return newUser;
   }
-  // Cập nhật thông tin hồ sơ người dùng (Firestore)
+
+  // CẬP NHẬT HỒ SƠ NGƯỜI DÙNG
+
   Future<void> updateUserProfile(String uid, String? name, String? goal) async {
     await _users.doc(uid).set({
       'displayName': name,
       'goal': goal,
     }, SetOptions(merge: true));
+    debugPrint("📝 Hồ sơ người dùng $uid đã được cập nhật");
   }
 
-
-  // Firebase listeners
   Stream<User?> get authChanges => _auth.authChanges;
   User? get currentUser => _auth.currentUser;
 }

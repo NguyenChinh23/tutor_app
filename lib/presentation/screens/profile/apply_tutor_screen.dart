@@ -1,9 +1,8 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../data/repositories/auth_repository.dart';
-import '../../provider/auth_provider.dart';
 import 'package:tutor_app/config/app_router.dart';
+import 'package:tutor_app/presentation/provider/auth_provider.dart';
+import '../../../data/repositories/auth_repository.dart';
 
 class ApplyTutorScreen extends StatefulWidget {
   const ApplyTutorScreen({super.key});
@@ -17,6 +16,7 @@ class _ApplyTutorScreenState extends State<ApplyTutorScreen> {
   final subject = TextEditingController();
   final experience = TextEditingController();
   final description = TextEditingController();
+  final price = TextEditingController();
 
   bool submitting = false;
 
@@ -50,14 +50,14 @@ class _ApplyTutorScreenState extends State<ApplyTutorScreen> {
             TextField(
               controller: fullName,
               decoration: const InputDecoration(
-                labelText: 'Họ tên',
+                labelText: 'Họ và tên',
                 prefixIcon: Icon(Icons.person_outline),
                 border: OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 14),
 
-            // 🔹 Môn dạy chính
+            // 🔹 Môn dạy
             TextField(
               controller: subject,
               decoration: const InputDecoration(
@@ -80,12 +80,24 @@ class _ApplyTutorScreenState extends State<ApplyTutorScreen> {
             ),
             const SizedBox(height: 14),
 
+            // 🔹 Học phí
+            TextField(
+              controller: price,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Giá dạy (VND/giờ)',
+                prefixIcon: Icon(Icons.monetization_on_outlined),
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 14),
+
             // 🔹 Mô tả ngắn
             TextField(
               controller: description,
               maxLines: 3,
               decoration: const InputDecoration(
-                labelText: 'Mô tả ngắn',
+                labelText: 'Mô tả ngắn về bản thân / kinh nghiệm giảng dạy',
                 prefixIcon: Icon(Icons.description_outlined),
                 border: OutlineInputBorder(),
               ),
@@ -93,7 +105,7 @@ class _ApplyTutorScreenState extends State<ApplyTutorScreen> {
 
             const SizedBox(height: 25),
 
-            // 🔹 Nút gửi hồ sơ
+            // 🔹 Nút Gửi hồ sơ
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
@@ -120,6 +132,7 @@ class _ApplyTutorScreenState extends State<ApplyTutorScreen> {
                   final sub = subject.text.trim();
                   final exp = experience.text.trim();
                   final desc = description.text.trim();
+                  final cost = double.tryParse(price.text.trim()) ?? 0;
 
                   if ([name, sub, exp, desc].any((e) => e.isEmpty)) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -131,8 +144,8 @@ class _ApplyTutorScreenState extends State<ApplyTutorScreen> {
                   }
 
                   setState(() => submitting = true);
+
                   try {
-                    print(' Gửi hồ sơ lên Firestore...');
                     await repo.applyTutor(
                       uid: auth.user!.uid,
                       email: auth.user!.email ?? '',
@@ -140,8 +153,9 @@ class _ApplyTutorScreenState extends State<ApplyTutorScreen> {
                       subject: sub,
                       experience: exp,
                       description: desc,
+                      price: cost,
+                      avatarUrl: auth.user?.avatarUrl ?? '',
                     );
-                    print('Gửi hồ sơ thành công');
 
                     if (!mounted) return;
 
@@ -152,24 +166,14 @@ class _ApplyTutorScreenState extends State<ApplyTutorScreen> {
                       ),
                     );
 
-                    //  Chuyển sang trang StudentHome và xóa route cũ
                     Navigator.of(context).pushNamedAndRemoveUntil(
                       AppRouter.studentHome,
                           (route) => false,
                     );
-                  } on FirebaseException catch (e) {
-                    print('Firebase lỗi: ${e.code} - ${e.message}');
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Firebase lỗi: ${e.message}'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
                   } catch (e) {
-                    print('Lỗi khác: $e');
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Lỗi không xác định: $e'),
+                        content: Text('Lỗi khi gửi hồ sơ: $e'),
                         backgroundColor: Colors.red,
                       ),
                     );
@@ -207,13 +211,14 @@ class _ApplyTutorScreenState extends State<ApplyTutorScreen> {
                   color: Colors.orange.shade50,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Row(
-                  children: const [
-                    Icon(Icons.hourglass_empty),
+                child: const Row(
+                  children: [
+                    Icon(Icons.hourglass_empty, color: Colors.orange),
                     SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         "Trạng thái: Hồ sơ của bạn đang chờ được duyệt.",
+                        style: TextStyle(color: Colors.black87),
                       ),
                     ),
                   ],

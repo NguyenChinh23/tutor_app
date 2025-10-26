@@ -170,7 +170,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
                     try {
                       await auth.register(context, email, pass);
-                      _showSnack("Đăng ký thành công 🎉");
+                      _showSnack("Đăng ký thành công ");
                       Navigator.of(context).pushNamed(AppRouter.login);
                     } on FirebaseAuthException catch (e) {
                       if (e.code == 'email-already-in-use') {

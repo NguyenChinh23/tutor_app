@@ -13,19 +13,19 @@ class ChatListScreen extends StatelessWidget {
         "name": "Alice Nguyen",
         "message": "See you tomorrow!",
         "time": "09:30 AM",
-        "avatar": "assets/images/avatar.png"
+        "avatar": "assets/tutor1.png"
       },
       {
         "name": "John Tran",
         "message": "Sure, I'll send materials.",
         "time": "08:15 AM",
-        "avatar": "assets/images/avatar.png"
+        "avatar": "assets/tutor1.png"
       },
       {
         "name": "Tutor Mai Linh",
         "message": "The next class is at 7pm.",
         "time": "Yesterday",
-        "avatar": "assets/images/avatar.png"
+        "avatar": "assets/tutor1.png"
       },
     ];
 

@@ -33,7 +33,7 @@ class GreetingAppBar extends StatelessWidget implements PreferredSizeWidget {
                 radius: 22,
                 backgroundImage: (user?.avatarUrl?.isNotEmpty ?? false)
                     ? NetworkImage(user!.avatarUrl!)
-                    : const AssetImage('assets/images/avatar.png')
+                    : const AssetImage('assets/tutor1.png')
                 as ImageProvider,
               ),
             ),

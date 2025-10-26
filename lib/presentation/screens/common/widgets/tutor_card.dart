@@ -26,7 +26,7 @@ class TutorCard extends StatelessWidget {
             radius: 30,
             backgroundImage: tutor.avatarUrl != null && tutor.avatarUrl!.isNotEmpty
                 ? NetworkImage(tutor.avatarUrl!)
-                : const AssetImage('assets/images/avatar.png') as ImageProvider,
+                : const AssetImage('assets/tutor1.png') as ImageProvider,
           ),
           const SizedBox(width: 10),
 

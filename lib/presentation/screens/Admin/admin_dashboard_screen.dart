@@ -21,7 +21,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   Widget build(BuildContext context) {
     final fs = FirebaseFirestore.instance;
     final repo = AuthRepository();
-    final reviewerUid = repo.currentUser?.uid ?? 'admin';
+    final reviewerUid = repo.currentUser?.uid ?? "admin";
 
     final List<Widget> pages = _statuses.map((status) {
       return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -36,18 +36,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           }
           if (snapshot.hasError) {
             return Center(
-              child: Text("Lỗi tải dữ liệu: ${snapshot.error}",
-                  style: const TextStyle(color: Colors.red)),
-            );
+                child: Text("Lỗi tải dữ liệu: ${snapshot.error}",
+                    style: const TextStyle(color: Colors.red)));
           }
 
           final docs = snapshot.data?.docs ?? [];
           if (docs.isEmpty) {
             return const Center(
-              child: Text(
-                "📭 Không có hồ sơ nào.",
-                style: TextStyle(color: Colors.grey),
-              ),
+              child: Text("📭 Không có hồ sơ nào.", style: TextStyle(color: Colors.grey)),
             );
           }
 
@@ -61,14 +57,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               final exp = d['experience'] ?? '0';
               final desc = d['description'] ?? '';
               final uid = d['uid'];
-              final appId = docs[i].id;
+              final appId = d['id']; // 🔹 Dùng field "id" trong document
+              final email = d['email'] ?? '';
 
               return Card(
                 margin: const EdgeInsets.symmetric(vertical: 8),
                 elevation: 4,
                 color: Colors.white,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
@@ -86,50 +82,73 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           child: Text(" Mô tả: $desc"),
                         ),
                       const SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          if (status == 'pending') ...[
+
+                      // Nút hành động
+                      if (status == 'pending')
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
                             ElevatedButton.icon(
                               onPressed: () async {
-                                await _approveTutor(
-                                    uid, appId, reviewerUid, name);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                      content: Text("Duyệt thành công")),
-                                );
+                                try {
+                                  await repo.approveTutor(
+                                    uid: uid,
+                                    appId: appId,
+                                    reviewerUid: reviewerUid,
+                                  );
+
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content:
+                                      Text("✅ Đã duyệt hồ sơ của $name ($email)"),
+                                      backgroundColor: Colors.green,
+                                    ),
+                                  );
+                                } catch (e) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text("Lỗi duyệt: $e"),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                }
                               },
                               icon: const Icon(Icons.check),
                               label: const Text("Duyệt"),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.green,
-                              ),
+                                  backgroundColor: Colors.green),
                             ),
                             const SizedBox(width: 8),
                             ElevatedButton.icon(
                               onPressed: () async {
-                                await fs
-                                    .collection('tutorApplications')
-                                    .doc(appId)
-                                    .update({
-                                  'status': 'rejected',
-                                  'reviewedBy': reviewerUid,
-                                  'reviewedAt': FieldValue.serverTimestamp(),
-                                });
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                      content: Text(" Đã từ chối hồ sơ")),
-                                );
+                                try {
+                                  await repo.rejectTutor(
+                                    appId: appId,
+                                    reviewerUid: reviewerUid,
+                                  );
+
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text("🚫 Đã từ chối hồ sơ"),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                } catch (e) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text("Lỗi từ chối: $e"),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                }
                               },
                               icon: const Icon(Icons.close),
                               label: const Text("Từ chối"),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.red,
-                              ),
+                                  backgroundColor: Colors.red),
                             ),
                           ],
-                        ],
-                      ),
+                        ),
                     ],
                   ),
                 ),
@@ -160,7 +179,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         ],
       ),
       body: pages[_selectedIndex],
-
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         selectedItemColor: AppTheme.primaryColor,
@@ -177,27 +195,5 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         ],
       ),
     );
-  }
-
-  /// ✅ Duyệt hồ sơ: cập nhật 2 nơi (users + tutorApplications)
-  Future<void> _approveTutor(
-      String uid, String appId, String reviewerUid, String name) async {
-    final fs = FirebaseFirestore.instance;
-    final batch = fs.batch();
-
-    final appRef = fs.collection('tutorApplications').doc(appId);
-    batch.update(appRef, {
-      'status': 'approved',
-      'reviewedBy': reviewerUid,
-      'reviewedAt': FieldValue.serverTimestamp(),
-    });
-
-    final userRef = fs.collection('users').doc(uid);
-    batch.update(userRef, {
-      'role': 'tutor',
-      'isTutorVerified': true,
-    });
-
-    await batch.commit();
   }
 }
