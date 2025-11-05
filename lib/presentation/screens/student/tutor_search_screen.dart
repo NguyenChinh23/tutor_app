@@ -6,6 +6,8 @@ import 'package:tutor_app/config/theme.dart';
 import 'package:tutor_app/presentation/provider/tutor_provider.dart';
 import 'package:tutor_app/data/models/recent_search_item.dart';
 import 'package:tutor_app/data/repositories/recent_search_repository.dart';
+import 'package:tutor_app/presentation/screens/student/tutor_detail_screen.dart';
+import 'package:tutor_app/data/models/tutor_model.dart';
 
 String _fmtVnd(num v) =>
     NumberFormat.currency(locale: 'vi_VN', symbol: '', decimalDigits: 0).format(v);
@@ -250,6 +252,7 @@ class _TutorSearchScreenState extends State<TutorSearchScreen> {
                             ),
                             onTap: () async {
                               if (isTutor) {
+                                // Lưu vào recent nếu là tutor
                                 _recent = await _repo.addTutor(
                                   _recent,
                                   name: it.name ?? it.term,
@@ -259,6 +262,25 @@ class _TutorSearchScreenState extends State<TutorSearchScreen> {
                                   avatarUrl: it.avatarUrl,
                                 );
                                 setState(() {});
+
+                                //  Tìm TutorModel thật từ provider theo name (tạm thời)
+                                final provider = context.read<TutorProvider>();
+                                final List<TutorModel> match = provider.tutors
+                                    .where((t) => t.name == (it.name ?? it.term))
+                                    .toList();
+
+                                if (match.isNotEmpty) {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => TutorDetailScreen(tutor: match.first),
+                                    ),
+                                  );
+                                } else {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Không tìm thấy hồ sơ chi tiết của gia sư này.')),
+                                  );
+                                }
                               } else {
                                 _controller.text = it.term;
                                 _controller.selection = TextSelection.fromPosition(

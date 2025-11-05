@@ -10,6 +10,7 @@ import 'package:tutor_app/presentation/screens/chat/chat_list_screen.dart';
 import 'package:tutor_app/presentation/screens/profile/student_profile_screen.dart';
 import 'package:tutor_app/presentation/screens/student/tutor_search_screen.dart';
 import 'package:tutor_app/presentation/screens/student/filter_bottom_sheet.dart';
+import 'package:tutor_app/presentation/screens/student/tutor_detail_screen.dart';
 
 String fmtVnd(num v) => NumberFormat.currency(
   locale: 'vi_VN',
@@ -179,13 +180,24 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                         (tutor) => AnimatedOpacity(
                       duration: const Duration(milliseconds: 400),
                       opacity: 1,
-                      child: TutorCard(
-                        tutor: tutor,
-                        onBook: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text("Booked ${tutor.name}!")),
+                      child: InkWell(
+                        // ✅ Chạm vào card để mở chi tiết
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => TutorDetailScreen(tutor: tutor),
+                            ),
                           );
                         },
+                        child: TutorCard(
+                          tutor: tutor,
+                          onBook: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text("Booked ${tutor.name}!")),
+                            );
+                          },
+                        ),
                       ),
                     ),
                   )
