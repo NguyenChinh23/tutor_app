@@ -175,11 +175,17 @@ class AppAuthProvider extends ChangeNotifier {
     }
   }
 
-  // 🔹 Cập nhật hồ sơ
+  // 🔹 Cập nhật hồ sơ (student + tutor)
   Future<void> updateProfile(
       String name,
       String goal, {
         String? avatarUrl,
+
+        // field cho tutor – student bỏ trống
+        String? subject,
+        String? bio,
+        double? price,
+        String? experience,
       }) async {
     if (_user == null) return;
     try {
@@ -188,16 +194,20 @@ class AppAuthProvider extends ChangeNotifier {
         name,
         goal,
         avatarUrl: avatarUrl,
+        subject: subject,
+        bio: bio,
+        price: price,
+        experience: experience,
       );
 
-      // cập nhật model cục bộ
+      // UserModel hiện chỉ lưu name/avatar/goal
       _user = _user!.copyWith(
         displayName: name,
         goal: goal,
         avatarUrl: avatarUrl ?? _user!.avatarUrl,
       );
 
-      notifyListeners(); // báo cho UI rebuild
+      notifyListeners();
     } catch (e) {
       debugPrint("Update profile error: $e");
       rethrow;

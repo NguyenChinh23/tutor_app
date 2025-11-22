@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -17,21 +18,72 @@ class EditProfileScreen extends StatefulWidget {
 class _EditProfileScreenState extends State<EditProfileScreen> {
   late TextEditingController nameController;
   late TextEditingController goalController;
+
+  // field riêng cho tutor
+  late TextEditingController subjectController;
+  late TextEditingController priceController;
+  late TextEditingController experienceController;
+  late TextEditingController bioController;
+
   File? _avatarFile;
   bool _saving = false;
+  bool _loadingExtra = false;
 
   @override
   void initState() {
     super.initState();
     final user = context.read<AppAuthProvider>().user;
+
     nameController = TextEditingController(text: user?.displayName ?? '');
     goalController = TextEditingController(text: user?.goal ?? '');
+
+    subjectController = TextEditingController();
+    priceController = TextEditingController();
+    experienceController = TextEditingController();
+    bioController = TextEditingController();
+
+    if (user != null && user.role == 'tutor') {
+      _loadTutorExtra(user.uid);
+    }
+  }
+
+  Future<void> _loadTutorExtra(String uid) async {
+    setState(() => _loadingExtra = true);
+    try {
+      final snap =
+      await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      final data = snap.data();
+      if (data != null) {
+        subjectController.text = (data['subject'] ?? '').toString();
+        bioController.text = (data['bio'] ?? '').toString();
+        experienceController.text = (data['experience'] ?? '').toString();
+
+        final p = data['price'];
+        if (p != null) {
+          if (p is int) {
+            priceController.text = p.toString();
+          } else if (p is num) {
+            priceController.text = p.toStringAsFixed(0);
+          } else {
+            priceController.text = p.toString();
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Load tutor extra error: $e');
+    } finally {
+      if (mounted) setState(() => _loadingExtra = false);
+    }
   }
 
   @override
   void dispose() {
     nameController.dispose();
     goalController.dispose();
+    subjectController.dispose();
+    priceController.dispose();
+    experienceController.dispose();
+    bioController.dispose();
     super.dispose();
   }
 
@@ -41,7 +93,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final picker = ImagePicker();
       final picked = await picker.pickImage(
         source: ImageSource.gallery,
-        imageQuality: 70, // nén bớt cho nhẹ
+        imageQuality: 70,
       );
 
       if (picked != null) {
@@ -65,11 +117,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
-  /// Lưu dữ liệu: name, goal, avatar (base64 hoặc giữ nguyên)
+  /// Lưu dữ liệu
   Future<void> _save() async {
     final auth = context.read<AppAuthProvider>();
     final user = auth.user;
     if (user == null) return;
+
+    final bool isTutor = user.role == 'tutor';
 
     setState(() => _saving = true);
     try {
@@ -82,10 +136,38 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         debugPrint('Avatar encoded length = ${avatarValue.length}');
       }
 
+      // goal:
+      // - Student: lấy từ TextField
+      // - Tutor: giữ nguyên goal cũ (không cho sửa)
+      final String finalGoal =
+      isTutor ? (user.goal ?? '') : goalController.text.trim();
+
+      String? subject;
+      String? bio;
+      double? price;
+      String? experience;
+
+      if (isTutor) {
+        subject = subjectController.text.trim();
+        bio = bioController.text.trim();
+        experience = experienceController.text.trim();
+
+        final raw = priceController.text
+            .trim()
+            .replaceAll('.', '')
+            .replaceAll(',', '');
+        final parsed = double.tryParse(raw);
+        if (parsed != null) price = parsed;
+      }
+
       await auth.updateProfile(
         nameController.text.trim(),
-        goalController.text.trim(),
+        finalGoal,
         avatarUrl: avatarValue,
+        subject: subject,
+        bio: bio,
+        price: price,
+        experience: experience,
       );
 
       if (!mounted) return;
@@ -113,7 +195,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     try {
       if (url.startsWith('http')) {
-        // Ảnh dạng URL (tutor cũ / default)
+        // Ảnh dạng URL (tutor apply ban đầu)
         return NetworkImage(url);
       } else {
         // Ảnh lưu dạng base64 trong Firestore
@@ -138,6 +220,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
 
     final avatarImage = _buildAvatarImage(auth);
+    final isTutor = user.role == 'tutor';
 
     return Scaffold(
       appBar: AppBar(
@@ -147,20 +230,23 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            GestureDetector(
-              onTap: _pickImage,
-              child: CircleAvatar(
-                radius: 45,
-                backgroundColor: Colors.grey.shade200,
-                backgroundImage: avatarImage,
-                child: avatarImage == null
-                    ? const Icon(
-                  Icons.camera_alt,
-                  size: 32,
-                  color: Colors.grey,
-                )
-                    : null,
+            Center(
+              child: GestureDetector(
+                onTap: _pickImage,
+                child: CircleAvatar(
+                  radius: 45,
+                  backgroundColor: Colors.grey.shade200,
+                  backgroundImage: avatarImage,
+                  child: avatarImage == null
+                      ? const Icon(
+                    Icons.camera_alt,
+                    size: 32,
+                    color: Colors.grey,
+                  )
+                      : null,
+                ),
               ),
             ),
             const SizedBox(height: 20),
@@ -169,11 +255,57 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               decoration: const InputDecoration(labelText: "Họ và tên"),
             ),
             const SizedBox(height: 10),
-            TextField(
-              controller: goalController,
-              decoration:
-              const InputDecoration(labelText: "Mục tiêu học tập"),
-            ),
+
+            // 🔹 Chỉ học viên mới có mục tiêu học tập
+            if (!isTutor) ...[
+              TextField(
+                controller: goalController,
+                decoration:
+                const InputDecoration(labelText: "Mục tiêu học tập"),
+              ),
+            ],
+
+            // === field dành cho tutor ===
+            if (isTutor) ...[
+              const SizedBox(height: 20),
+              if (_loadingExtra)
+                const Center(child: CircularProgressIndicator())
+              else ...[
+                TextField(
+                  controller: subjectController,
+                  decoration: const InputDecoration(
+                    labelText: "Môn dạy (ví dụ: Math)",
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: priceController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: "Giá mỗi buổi (VND)",
+                    hintText: "Ví dụ: 200000",
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: experienceController,
+                  decoration: const InputDecoration(
+                    labelText: "Kinh nghiệm",
+                    hintText: "Ví dụ: 5 năm",
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: bioController,
+                  maxLines: 4,
+                  decoration: const InputDecoration(
+                    labelText: "Giới thiệu bản thân (bio)",
+                    alignLabelWithHint: true,
+                  ),
+                ),
+              ],
+            ],
+
             const SizedBox(height: 25),
             SizedBox(
               width: double.infinity,

@@ -8,8 +8,10 @@ class AuthRepository {
   final _fs = FirebaseFirestore.instance;
   final _auth = AuthService();
 
-  CollectionReference<Map<String, dynamic>> get _users => _fs.collection('users');
-  CollectionReference<Map<String, dynamic>> get _tutorApps => _fs.collection('tutorApplications');
+  CollectionReference<Map<String, dynamic>> get _users =>
+      _fs.collection('users');
+  CollectionReference<Map<String, dynamic>> get _tutorApps =>
+      _fs.collection('tutorApplications');
 
   // 🔹 Đăng ký email → mặc định role student
   Future<UserModel?> register(String email, String password) async {
@@ -60,9 +62,7 @@ class AuthRepository {
     });
   }
 
-
   // 🔹 APPLY TRỞ THÀNH GIA SƯ
-
   Future<void> applyTutor({
     required String uid,
     required String email,
@@ -92,16 +92,18 @@ class AuthRepository {
       'reviewedBy': null,
     });
 
-    await _users.doc(uid).set({
-      'role': 'tutor',
-      'isTutorVerified': false,
-    }, SetOptions(merge: true));
+    await _users.doc(uid).set(
+      {
+        'role': 'tutor',
+        'isTutorVerified': false,
+      },
+      SetOptions(merge: true),
+    );
 
     debugPrint(" Hồ sơ gia sư của $email đã gửi lên Firestore (pending)");
   }
 
   // 🔹 ADMIN DUYỆT GIA SƯ
-
   Future<void> approveTutor({
     required String uid,
     required String appId,
@@ -154,9 +156,7 @@ class AuthRepository {
     debugPrint("🚫 Hồ sơ $appId đã bị từ chối");
   }
 
-
   //  FETCH HOẶC TẠO USER (khi login lần đầu)
-
   Future<UserModel?> _fetchOrCreateStudent(User user) async {
     final doc = await _users.doc(user.uid).get();
     if (doc.exists) return UserModel.fromMap(doc.data()!);
@@ -174,22 +174,29 @@ class AuthRepository {
     return newUser;
   }
 
-  // CẬP NHẬT HỒ SƠ NGƯỜI DÙNG
-
+  // 🔹 CẬP NHẬT HỒ SƠ NGƯỜI DÙNG (student + tutor)
   Future<void> updateUserProfile(
       String uid,
       String name,
       String goal, {
         String? avatarUrl,
+
+        // field dành cho tutor (có thể null với student)
+        String? subject,
+        String? bio,
+        double? price,
+        String? experience,
       }) async {
     final data = <String, dynamic>{
       'displayName': name,
       'goal': goal,
     };
 
-    if (avatarUrl != null) {
-      data['avatarUrl'] = avatarUrl;
-    }
+    if (avatarUrl != null) data['avatarUrl'] = avatarUrl;
+    if (subject != null) data['subject'] = subject;
+    if (bio != null) data['bio'] = bio;
+    if (price != null) data['price'] = price;
+    if (experience != null) data['experience'] = experience;
 
     await _users.doc(uid).set(
       data,
