@@ -176,12 +176,27 @@ class AuthRepository {
 
   // CẬP NHẬT HỒ SƠ NGƯỜI DÙNG
 
-  Future<void> updateUserProfile(String uid, String? name, String? goal) async {
-    await _users.doc(uid).set({
+  Future<void> updateUserProfile(
+      String uid,
+      String name,
+      String goal, {
+        String? avatarUrl,
+      }) async {
+    final data = <String, dynamic>{
       'displayName': name,
       'goal': goal,
-    }, SetOptions(merge: true));
-    debugPrint("📝 Hồ sơ người dùng $uid đã được cập nhật");
+    };
+
+    if (avatarUrl != null) {
+      data['avatarUrl'] = avatarUrl;
+    }
+
+    await _users.doc(uid).set(
+      data,
+      SetOptions(merge: true),
+    );
+
+    debugPrint(" Hồ sơ người dùng $uid đã được cập nhật");
   }
 
   Stream<User?> get authChanges => _auth.authChanges;

@@ -17,6 +17,8 @@ class AppAuthProvider extends ChangeNotifier {
   String? _adminUid;
   String? get adminUid => _adminUid;
 
+  bool _justRegistered = false; // tránh redirect sau khi đăng ký
+
   void _setLoading(bool v) {
     _loading = v;
     notifyListeners();
@@ -52,16 +54,13 @@ class AppAuthProvider extends ChangeNotifier {
     });
   }
 
-  bool _justRegistered = false; // tránh redirect sau khi đăng ký
-
   // 🔹 Điều hướng theo vai trò
   void _navigateAfterLogin(UserModel u) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final ctx = navigatorKey.currentContext;
       if (ctx == null) return;
 
-      if (u.role == 'admin' ||
-          u.uid == "eYngCmflUZQ2p2k9XfvctEvyOWP2") {
+      if (u.role == 'admin' || u.uid == "eYngCmflUZQ2p2k9XfvctEvyOWP2") {
         Navigator.pushReplacementNamed(ctx, AppRouter.admin);
       } else if (u.role == 'tutor') {
         if (u.isTutorVerified == true) {
@@ -76,7 +75,11 @@ class AppAuthProvider extends ChangeNotifier {
   }
 
   // 🔹 Đăng nhập Email & Password
-  Future<void> login(BuildContext context, String email, String password) async {
+  Future<void> login(
+      BuildContext context,
+      String email,
+      String password,
+      ) async {
     _setLoading(true);
     try {
       final user = await _repo.login(email, password);
@@ -93,6 +96,7 @@ class AppAuthProvider extends ChangeNotifier {
       _setLoading(false);
     }
   }
+
   // 🔹 Đăng nhập bằng Google
   Future<void> loginWithGoogle(BuildContext context) async {
     _setLoading(true);
@@ -113,9 +117,12 @@ class AppAuthProvider extends ChangeNotifier {
     }
   }
 
-
   // 🔹 Đăng ký tài khoản → quay lại login
-  Future<void> register(BuildContext context, String email, String password) async {
+  Future<void> register(
+      BuildContext context,
+      String email,
+      String password,
+      ) async {
     _setLoading(true);
     _justRegistered = true;
     try {
@@ -128,7 +135,9 @@ class AppAuthProvider extends ChangeNotifier {
       _user = null;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Đăng ký thành công 🎉 Vui lòng đăng nhập!")),
+        const SnackBar(
+          content: Text("Đăng ký thành công 🎉 Vui lòng đăng nhập!"),
+        ),
       );
 
       Navigator.pushReplacementNamed(context, AppRouter.login);
@@ -142,11 +151,18 @@ class AppAuthProvider extends ChangeNotifier {
     }
   }
 
-  // 🔹 Đăng xuất
+  // 🔹 Đăng xuất – ưu tiên UI nhanh
   Future<void> logout() async {
-    await _repo.logout();
+    // 1. Xoá user cục bộ trước → UI chuyển màn hình ngay
     _user = null;
     notifyListeners();
+
+    // 2. Gọi Firebase signOut phía sau
+    try {
+      await _repo.logout();
+    } catch (e) {
+      debugPrint('Logout error: $e');
+    }
   }
 
   // 🔹 Quên mật khẩu
@@ -160,12 +176,28 @@ class AppAuthProvider extends ChangeNotifier {
   }
 
   // 🔹 Cập nhật hồ sơ
-  Future<void> updateProfile(String name, String goal) async {
+  Future<void> updateProfile(
+      String name,
+      String goal, {
+        String? avatarUrl,
+      }) async {
     if (_user == null) return;
     try {
-      await _repo.updateUserProfile(_user!.uid, name, goal);
-      _user = _user!.copyWith(displayName: name, goal: goal);
-      notifyListeners();
+      await _repo.updateUserProfile(
+        _user!.uid,
+        name,
+        goal,
+        avatarUrl: avatarUrl,
+      );
+
+      // cập nhật model cục bộ
+      _user = _user!.copyWith(
+        displayName: name,
+        goal: goal,
+        avatarUrl: avatarUrl ?? _user!.avatarUrl,
+      );
+
+      notifyListeners(); // báo cho UI rebuild
     } catch (e) {
       debugPrint("Update profile error: $e");
       rethrow;

@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert'; // 👈 THÊM
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -17,6 +19,23 @@ String _initials(String name) {
   if (p.isEmpty) return '?';
   if (p.length == 1) return p.first[0].toUpperCase();
   return (p.first[0] + p.last[0]).toUpperCase();
+}
+
+/// Avatar helper: hỗ trợ cả link http và base64
+ImageProvider? _buildAvatar(String? avatarUrl) {
+  if (avatarUrl == null || avatarUrl.isEmpty) return null;
+
+  try {
+    if (avatarUrl.startsWith('http')) {
+      return NetworkImage(avatarUrl);
+    } else {
+      final bytes = base64Decode(avatarUrl);
+      return MemoryImage(bytes);
+    }
+  } catch (e) {
+    debugPrint('Search avatar decode error: $e');
+    return null;
+  }
 }
 
 class TutorSearchScreen extends StatefulWidget {
@@ -192,18 +211,22 @@ class _TutorSearchScreenState extends State<TutorSearchScreen> {
                           final isTutor = it.type == 'tutor';
                           final displayName = isTutor ? (it.name ?? it.term) : it.term;
 
+                          final avatarImage = _buildAvatar(it.avatarUrl); // 👈 dùng helper
+
                           return ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
                             leading: CircleAvatar(
                               radius: 20,
                               backgroundColor: primary.withOpacity(0.08),
-                              backgroundImage: (it.avatarUrl != null && it.avatarUrl!.isNotEmpty)
-                                  ? NetworkImage(it.avatarUrl!)
-                                  : null,
-                              child: (it.avatarUrl == null || it.avatarUrl!.isEmpty)
+                              backgroundImage: avatarImage,
+                              child: avatarImage == null
                                   ? Text(
                                 _initials(displayName),
-                                style: TextStyle(color: primary, fontWeight: FontWeight.w700),
+                                style: TextStyle(
+                                  color: primary,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               )
                                   : null,
                             ),
@@ -224,20 +247,24 @@ class _TutorSearchScreenState extends State<TutorSearchScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 10),
-                                const Icon(Icons.star, size: 14, color: Colors.amber),
+                                const Icon(Icons.star,
+                                    size: 14, color: Colors.amber),
                                 const SizedBox(width: 2),
                                 Text(
                                   ((it.rating ?? 0).toStringAsFixed(1)),
-                                  style: const TextStyle(fontWeight: FontWeight.w600),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w600),
                                 ),
                                 const SizedBox(width: 10),
                                 Text(
                                   "${_fmtVnd(it.price ?? 0)} đ/h",
-                                  style: const TextStyle(fontWeight: FontWeight.w600),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w600),
                                 ),
                               ],
                             )
-                                : Text('Từ khóa', style: TextStyle(color: Colors.grey[600])),
+                                : Text('Từ khóa',
+                                style: TextStyle(color: Colors.grey[600])),
                             trailing: PopupMenuButton<String>(
                               onSelected: (v) async {
                                 if (v == 'delete') {
@@ -246,7 +273,9 @@ class _TutorSearchScreenState extends State<TutorSearchScreen> {
                                 }
                               },
                               itemBuilder: (_) => const [
-                                PopupMenuItem(value: 'delete', child: Text('Xóa khỏi danh sách')),
+                                PopupMenuItem(
+                                    value: 'delete',
+                                    child: Text('Xóa khỏi danh sách')),
                               ],
                               icon: const Icon(Icons.more_vert),
                             ),
@@ -266,26 +295,31 @@ class _TutorSearchScreenState extends State<TutorSearchScreen> {
                                 //  Tìm TutorModel thật từ provider theo name (tạm thời)
                                 final provider = context.read<TutorProvider>();
                                 final List<TutorModel> match = provider.tutors
-                                    .where((t) => t.name == (it.name ?? it.term))
+                                    .where((t) =>
+                                t.name == (it.name ?? it.term))
                                     .toList();
 
                                 if (match.isNotEmpty) {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (_) => TutorDetailScreen(tutor: match.first),
+                                      builder: (_) =>
+                                          TutorDetailScreen(tutor: match.first),
                                     ),
                                   );
                                 } else {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Không tìm thấy hồ sơ chi tiết của gia sư này.')),
+                                    const SnackBar(
+                                        content: Text(
+                                            'Không tìm thấy hồ sơ chi tiết của gia sư này.')),
                                   );
                                 }
                               } else {
                                 _controller.text = it.term;
-                                _controller.selection = TextSelection.fromPosition(
-                                  TextPosition(offset: it.term.length),
-                                );
+                                _controller.selection =
+                                    TextSelection.fromPosition(
+                                      TextPosition(offset: it.term.length),
+                                    );
                                 await _onSubmitted(it.term);
                               }
                             },

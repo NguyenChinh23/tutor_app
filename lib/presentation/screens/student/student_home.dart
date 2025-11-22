@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -41,6 +42,25 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
     });
   }
 
+  /// avatar user: hỗ trợ http + base64 + fallback asset
+  ImageProvider _buildUserAvatar(String? avatarUrl) {
+    if (avatarUrl == null || avatarUrl.isEmpty) {
+      return const AssetImage('assets/avatar.png');
+    }
+
+    try {
+      if (avatarUrl.startsWith('http')) {
+        return NetworkImage(avatarUrl);
+      } else {
+        final bytes = base64Decode(avatarUrl);
+        return MemoryImage(bytes);
+      }
+    } catch (e) {
+      debugPrint('User avatar decode error: $e');
+      return const AssetImage('assets/avatar.png');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AppAuthProvider>();
@@ -61,15 +81,19 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
         unselectedItemColor: Colors.grey,
         onTap: (index) => setState(() => _selectedIndex = index),
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.chat_outlined), label: 'Chat'),
-          BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'Profile'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.home_outlined), label: 'Home'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.chat_outlined), label: 'Chat'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.person_outline), label: 'Profile'),
         ],
       ),
     );
   }
 
-  Widget _buildHome(BuildContext context, user, TutorProvider tutorProvider) {
+  Widget _buildHome(
+      BuildContext context, user, TutorProvider tutorProvider) {
     final tutors = tutorProvider.tutors.where((tutor) {
       final subjectMatch = selectedSubjects.isEmpty ||
           selectedSubjects.any((sub) =>
@@ -95,26 +119,31 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
               end: Alignment.bottomRight,
             ),
             boxShadow: const [
-              BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
+              BoxShadow(
+                  color: Colors.black26,
+                  blurRadius: 4,
+                  offset: Offset(0, 2)),
             ],
           ),
           child: SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 children: [
                   CircleAvatar(
                     radius: 22,
-                    backgroundImage: (user?.avatarUrl != null && user!.avatarUrl!.isNotEmpty)
-                        ? NetworkImage(user.avatarUrl!)
-                        : const AssetImage('assets/avatar.png') as ImageProvider,
+                    backgroundImage:
+                    _buildUserAvatar(user?.avatarUrl as String?),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text("Welcome,", style: TextStyle(color: Colors.white70, fontSize: 14)),
+                        const Text("Welcome,",
+                            style: TextStyle(
+                                color: Colors.white70, fontSize: 14)),
                         Text(
                           user?.displayName ?? "Student 👋",
                           overflow: TextOverflow.ellipsis,
@@ -136,7 +165,8 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
       body: tutorProvider.isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
-        onRefresh: () async => context.read<TutorProvider>().refresh(),
+        onRefresh: () async =>
+            context.read<TutorProvider>().refresh(),
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(16),
@@ -146,7 +176,8 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
               _searchAndFilterBar(context),
               const SizedBox(height: 24),
               const Text("Popular Subjects",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  style: TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
               SizedBox(
                 height: 45,
@@ -164,7 +195,8 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
               ),
               const SizedBox(height: 25),
               const Text("Top Tutors",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  style: TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
               if (tutors.isEmpty)
                 const Center(
@@ -178,23 +210,33 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                   children: tutors
                       .map(
                         (tutor) => AnimatedOpacity(
-                      duration: const Duration(milliseconds: 400),
+                      duration:
+                      const Duration(milliseconds: 400),
                       opacity: 1,
                       child: InkWell(
-                        // ✅ Chạm vào card để mở chi tiết
                         onTap: () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => TutorDetailScreen(tutor: tutor),
+                              builder: (_) => TutorDetailScreen(
+                                tutor: tutor,
+                                autoOpenBook: false,
+                              ),
                             ),
                           );
                         },
                         child: TutorCard(
                           tutor: tutor,
                           onBook: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text("Booked ${tutor.name}!")),
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    TutorDetailScreen(
+                                      tutor: tutor,
+                                      autoOpenBook: true,
+                                    ),
+                              ),
                             );
                           },
                         ),
@@ -215,7 +257,9 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
     final tutors = context.read<TutorProvider>().tutors;
     final double priceMaxLimit = tutors.isEmpty
         ? 1_000_000
-        : tutors.map((t) => (t.price as num).toDouble()).reduce(math.max);
+        : tutors
+        .map((t) => (t.price as num).toDouble())
+        .reduce(math.max);
 
     final result = await showFilterBottomSheet(
       context,
@@ -229,10 +273,13 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
     if (!mounted || result == null) return;
 
     setState(() {
-      selectedSubjects = List<String>.from(result["subjects"] ?? []);
+      selectedSubjects =
+      List<String>.from(result["subjects"] ?? []);
       minPrice = (result["minPrice"] as num?)?.toDouble() ?? 0;
-      maxPrice = (result["maxPrice"] as num?)?.toDouble() ?? priceMaxLimit;
-      minRating = (result["minRating"] as num?)?.toDouble() ?? 0;
+      maxPrice =
+          (result["maxPrice"] as num?)?.toDouble() ?? priceMaxLimit;
+      minRating =
+          (result["minRating"] as num?)?.toDouble() ?? 0;
     });
   }
 
@@ -245,12 +292,14 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const TutorSearchScreen()),
+                MaterialPageRoute(
+                    builder: (_) => const TutorSearchScreen()),
               );
             },
             child: Container(
               height: 48,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 14),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(14),
@@ -289,10 +338,14 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
               color: AppTheme.primaryColor.withOpacity(0.10),
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
-                BoxShadow(color: Colors.black12.withOpacity(0.06), blurRadius: 6, offset: Offset(0, 2)),
+                BoxShadow(
+                    color: Colors.black12.withOpacity(0.06),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2)),
               ],
             ),
-            child: Icon(Icons.tune, color: AppTheme.primaryColor),
+            child: Icon(Icons.tune,
+                color: AppTheme.primaryColor),
           ),
         ),
       ],
@@ -300,8 +353,8 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
   }
 
   Widget _subjectChip(String title, IconData icon) {
-    final isSelected =
-        selectedSubjects.contains(title) || (title == "All" && selectedSubjects.isEmpty);
+    final isSelected = selectedSubjects.contains(title) ||
+        (title == "All" && selectedSubjects.isEmpty);
     return GestureDetector(
       onTap: () {
         setState(() {
@@ -320,22 +373,33 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         margin: const EdgeInsets.only(right: 10),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.symmetric(
+            horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.primaryColor : Colors.white,
+          color: isSelected
+              ? AppTheme.primaryColor
+              : Colors.white,
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
-            BoxShadow(color: Colors.black12.withOpacity(0.05), blurRadius: 3),
+            BoxShadow(
+                color: Colors.black12.withOpacity(0.05),
+                blurRadius: 3),
           ],
         ),
         child: Row(
           children: [
-            Icon(icon, size: 18, color: isSelected ? Colors.white : AppTheme.primaryColor),
+            Icon(icon,
+                size: 18,
+                color: isSelected
+                    ? Colors.white
+                    : AppTheme.primaryColor),
             const SizedBox(width: 6),
             Text(
               title,
               style: TextStyle(
-                color: isSelected ? Colors.white : AppTheme.primaryColor,
+                color: isSelected
+                    ? Colors.white
+                    : AppTheme.primaryColor,
                 fontWeight: FontWeight.w500,
               ),
             ),

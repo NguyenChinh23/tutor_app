@@ -1,11 +1,44 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:tutor_app/config/theme.dart';
 import 'package:tutor_app/data/models/tutor_model.dart';
 
-class TutorCard extends StatelessWidget {
-  final TutorModel tutor;
-  final VoidCallback onBook;
+final _currencyFmt = NumberFormat.currency(
+  locale: 'vi_VN',
+  symbol: '₫',
+  decimalDigits: 0,
+);
 
-  const TutorCard({super.key, required this.tutor, required this.onBook});
+class TutorCard extends StatelessWidget {
+  const TutorCard({
+    super.key,
+    required this.tutor,
+    this.onBook,
+  });
+
+  final TutorModel tutor;
+  final VoidCallback? onBook;
+
+  ImageProvider _buildAvatar(String? avatarUrl) {
+    if (avatarUrl == null || avatarUrl.isEmpty) {
+      return const AssetImage('assets/tutor1.png');
+    }
+
+    try {
+      if (avatarUrl.startsWith('http')) {
+        return NetworkImage(avatarUrl);
+      } else {
+        // base64
+        final bytes = base64Decode(avatarUrl);
+        return MemoryImage(bytes);
+      }
+    } catch (e) {
+      debugPrint('Tutor avatar decode error: $e');
+      return const AssetImage('assets/tutor1.png');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -14,61 +47,87 @@ class TutorCard extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(color: Colors.black12.withOpacity(0.05), blurRadius: 6),
+          BoxShadow(
+            color: Colors.black12.withOpacity(0.05),
+            blurRadius: 5,
+            offset: const Offset(0, 2),
+          ),
         ],
       ),
       child: Row(
         children: [
-          // Ảnh đại diện gia sư
           CircleAvatar(
-            radius: 30,
-            backgroundImage: tutor.avatarUrl != null && tutor.avatarUrl!.isNotEmpty
-                ? NetworkImage(tutor.avatarUrl!)
-                : const AssetImage('assets/tutor1.png') as ImageProvider,
+            radius: 26,
+            backgroundImage: _buildAvatar(tutor.avatarUrl),
           ),
-          const SizedBox(width: 10),
-
-          // Thông tin gia sư
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   tutor.name,
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                  ),
                 ),
+                const SizedBox(height: 4),
                 Text(
                   tutor.subject,
-                  style: const TextStyle(color: Colors.black54),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Colors.black54,
+                  ),
                 ),
+                const SizedBox(height: 4),
                 Row(
                   children: [
-                    const Icon(Icons.star, color: Colors.amber, size: 16),
-                    Text((tutor.rating ?? 0).toStringAsFixed(1)),
+                    const Icon(Icons.star,
+                        size: 16, color: Colors.amber),
+                    const SizedBox(width: 4),
+                    Text(
+                      tutor.rating.toStringAsFixed(1),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
                     const SizedBox(width: 10),
-                    Text("\$${(tutor.price ?? 0).toStringAsFixed(0)}/h"),
+                    Text(
+                      '${_currencyFmt.format(tutor.price)}/h',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Colors.green,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ],
                 ),
               ],
             ),
           ),
-
-          // Nút Book
+          const SizedBox(width: 8),
           ElevatedButton(
-            onPressed: onBook,
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.indigo,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              backgroundColor: AppTheme.primaryColor,
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 8),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(12),
               ),
             ),
+            onPressed: onBook,
             child: const Text(
-              "Book",
-              style: TextStyle(color: Colors.white, fontSize: 14),
+              'Book',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],

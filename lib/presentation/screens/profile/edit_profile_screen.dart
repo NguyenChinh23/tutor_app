@@ -1,7 +1,8 @@
+import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:provider/provider.dart';
 import 'package:tutor_app/config/theme.dart';
 import 'package:tutor_app/presentation/provider/auth_provider.dart';
@@ -14,10 +15,18 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
-  final nameController = TextEditingController();
-  final goalController = TextEditingController();
+  late TextEditingController nameController;
+  late TextEditingController goalController;
   File? _avatarFile;
   bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final user = context.read<AppAuthProvider>().user;
+    nameController = TextEditingController(text: user?.displayName ?? '');
+    goalController = TextEditingController(text: user?.goal ?? '');
+  }
 
   @override
   void dispose() {
@@ -26,53 +35,109 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.dispose();
   }
 
-  /// 🔹 Mở gallery chọn ảnh
+  /// Chọn ảnh từ gallery
   Future<void> _pickImage() async {
     try {
       final picker = ImagePicker();
       final picked = await picker.pickImage(
         source: ImageSource.gallery,
-        imageQuality: 80,
+        imageQuality: 70, // nén bớt cho nhẹ
       );
 
       if (picked != null) {
         setState(() => _avatarFile = File(picked.path));
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Ảnh đã được chọn ')),
+          const SnackBar(content: Text('Ảnh đã được chọn')),
         );
       } else {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Bạn chưa chọn ảnh nào.')),
         );
       }
     } catch (e) {
       debugPrint('ImagePicker error: $e');
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Không thể chọn ảnh: $e')),
       );
     }
   }
 
-  /// 🔹 Upload ảnh lên Firebase Storage
-  Future<String?> _uploadAvatar(String uid) async {
-    if (_avatarFile == null) return null;
+  /// Lưu dữ liệu: name, goal, avatar (base64 hoặc giữ nguyên)
+  Future<void> _save() async {
+    final auth = context.read<AppAuthProvider>();
+    final user = auth.user;
+    if (user == null) return;
+
+    setState(() => _saving = true);
     try {
-      final ref = FirebaseStorage.instance.ref().child('avatars/$uid.jpg');
-      await ref.putFile(_avatarFile!);
-      return await ref.getDownloadURL();
+      String? avatarValue = user.avatarUrl;
+
+      // Nếu có chọn ảnh mới → convert sang base64
+      if (_avatarFile != null) {
+        final bytes = await _avatarFile!.readAsBytes();
+        avatarValue = base64Encode(bytes);
+        debugPrint('Avatar encoded length = ${avatarValue.length}');
+      }
+
+      await auth.updateProfile(
+        nameController.text.trim(),
+        goalController.text.trim(),
+        avatarUrl: avatarValue,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Cập nhật hồ sơ thành công 🎉")),
+      );
+      Navigator.pop(context);
     } catch (e) {
-      debugPrint('Upload error: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Lỗi: $e")),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  ImageProvider? _buildAvatarImage(AppAuthProvider auth) {
+    final user = auth.user;
+    if (_avatarFile != null) {
+      return FileImage(_avatarFile!);
+    }
+    final url = user?.avatarUrl;
+    if (url == null || url.isEmpty) return null;
+
+    try {
+      if (url.startsWith('http')) {
+        // Ảnh dạng URL (tutor cũ / default)
+        return NetworkImage(url);
+      } else {
+        // Ảnh lưu dạng base64 trong Firestore
+        final bytes = base64Decode(url);
+        return MemoryImage(bytes);
+      }
+    } catch (e) {
+      debugPrint('Avatar decode error: $e');
       return null;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final auth = Provider.of<AppAuthProvider>(context);
+    final auth = context.watch<AppAuthProvider>();
     final user = auth.user;
 
-    nameController.text = user?.displayName ?? '';
-    goalController.text = user?.goal ?? '';
+    if (user == null) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final avatarImage = _buildAvatarImage(auth);
 
     return Scaffold(
       appBar: AppBar(
@@ -88,15 +153,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               child: CircleAvatar(
                 radius: 45,
                 backgroundColor: Colors.grey.shade200,
-                backgroundImage: _avatarFile != null
-                    ? FileImage(_avatarFile!)
-                    : (user?.avatarUrl != null && user!.avatarUrl!.isNotEmpty)
-                    ? NetworkImage(user.avatarUrl!)
-                    : null,
-                child: _avatarFile == null &&
-                    (user?.avatarUrl == null ||
-                        user!.avatarUrl!.isEmpty)
-                    ? const Icon(Icons.camera_alt, size: 32, color: Colors.grey)
+                backgroundImage: avatarImage,
+                child: avatarImage == null
+                    ? const Icon(
+                  Icons.camera_alt,
+                  size: 32,
+                  color: Colors.grey,
+                )
                     : null,
               ),
             ),
@@ -108,7 +171,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             const SizedBox(height: 10),
             TextField(
               controller: goalController,
-              decoration: const InputDecoration(labelText: "Mục tiêu học tập"),
+              decoration:
+              const InputDecoration(labelText: "Mục tiêu học tập"),
             ),
             const SizedBox(height: 25),
             SizedBox(
@@ -118,41 +182,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   backgroundColor: AppTheme.primaryColor,
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
-                onPressed: _saving
-                    ? null
-                    : () async {
-                  if (user == null) return;
-                  setState(() => _saving = true);
-                  try {
-                    final avatarUrl =
-                        await _uploadAvatar(user.uid) ?? user.avatarUrl;
-
-                    await auth.updateProfile(
-                      nameController.text.trim(),
-                      goalController.text.trim(),
-                    );
-
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content:
-                          Text("Cập nhật hồ sơ thành công 🎉")),
-                    );
-                    Navigator.pop(context);
-                  } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text("Lỗi: $e")),
-                    );
-                  } finally {
-                    setState(() => _saving = false);
-                  }
-                },
+                onPressed: _saving ? null : _save,
                 child: _saving
                     ? const CircularProgressIndicator(color: Colors.white)
                     : const Text(
                   "Lưu thay đổi",
                   style: TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.bold),
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ),
