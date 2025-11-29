@@ -4,7 +4,7 @@ import 'package:tutor_app/presentation/screens/auth/register_page.dart';
 import 'package:tutor_app/presentation/screens/auth/reset_password_screen.dart';
 import 'package:tutor_app/presentation/screens/common/splash_screen.dart';
 import 'package:tutor_app/presentation/screens/admin/admin_dashboard_screen.dart';
-import 'package:tutor_app/presentation/screens/student/student_home.dart';
+import 'package:tutor_app/presentation/screens/student/student_home.dart' hide TutorHomeScreen;
 import 'package:tutor_app/presentation/screens/tutor/tutor_home.dart';
 import 'package:tutor_app/presentation/screens/profile/apply_tutor_screen.dart';
 import '../presentation/screens/profile/edit_profile_screen.dart';

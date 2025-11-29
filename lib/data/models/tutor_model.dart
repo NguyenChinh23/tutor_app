@@ -1,3 +1,4 @@
+// lib/data/models/tutor_model.dart
 class TutorModel {
   final String uid;
   final String name;
@@ -9,6 +10,7 @@ class TutorModel {
   final double rating;
   final String experience;
   final bool isTutorVerified;
+  final String availabilityNote;
 
   TutorModel({
     required this.uid,
@@ -21,31 +23,40 @@ class TutorModel {
     required this.rating,
     required this.experience,
     this.isTutorVerified = false,
+    this.availabilityNote = '',
   });
 
   factory TutorModel.fromMap(String id, Map<String, dynamic> data) {
+    double _toDouble(dynamic v) {
+      if (v is int) return v.toDouble();
+      if (v is num) return v.toDouble();
+      if (v is String) return double.tryParse(v) ?? 0;
+      return 0;
+    }
+
     return TutorModel(
       uid: id,
-      // đồng bộ name từ displayName / fullName / name
-      name: (data['displayName'] ?? data['fullName'] ?? data['name'] ?? 'Unknown Tutor').toString(),
+      name: (data['displayName'] ??
+          data['fullName'] ??
+          data['name'] ??
+          'Unknown Tutor')
+          .toString(),
       email: (data['email'] ?? '').toString(),
       avatarUrl: (data['avatarUrl'] ?? '').toString(),
       subject: (data['subject'] ?? 'General').toString(),
       bio: (data['bio'] ?? 'No bio available.').toString(),
-      price: (data['price'] is int)
-          ? (data['price'] as int).toDouble()
-          : (data['price'] ?? 0.0).toDouble(),
-      rating: (data['rating'] is int)
-          ? (data['rating'] as int).toDouble()
-          : (data['rating'] ?? 0.0).toDouble(),
-      experience: (data['experience'] ?? 'Chưa cập nhật').toString(),
+      price: _toDouble(data['price'] ?? 0),
+      rating: _toDouble(data['rating'] ?? 0),
+      experience: (data['experience'] ?? '').toString(),
+
+      /// đọc field mới, nếu chưa có thì rỗng
+      availabilityNote: (data['availabilityNote'] ?? '').toString(),
       isTutorVerified: data['isTutorVerified'] == true,
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
-      'uid': uid,
       'displayName': name,
       'email': email,
       'avatarUrl': avatarUrl,
@@ -55,6 +66,7 @@ class TutorModel {
       'rating': rating,
       'experience': experience,
       'isTutorVerified': isTutorVerified,
+      'availabilityNote': availabilityNote,
     };
   }
 }
