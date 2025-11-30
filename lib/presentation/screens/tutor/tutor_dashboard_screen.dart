@@ -65,6 +65,12 @@ class TutorDashboardScreen extends StatelessWidget {
         .orderBy('startAt')
         .snapshots();
 
+    // Stream: user doc để lấy rating, ratingCount
+    final userDocStream = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .snapshots();
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
@@ -199,14 +205,38 @@ class TutorDashboardScreen extends StatelessWidget {
                     ),
                     const SizedBox(width: 10),
 
-                    // Card: rating (tạm fix 4.8, sau bind data sau)
+                    // Card: Rating (lấy realtime từ users/{uid})
                     Expanded(
-                      child: _StatCard(
-                        title: 'Rating',
-                        value: '4.8',
-                        icon: Icons.star,
-                        color: Colors.amber[700] ?? Colors.amber,
-                        onTap: () {},
+                      child: StreamBuilder<
+                          DocumentSnapshot<Map<String, dynamic>>>(
+                        stream: userDocStream,
+                        builder: (context, snapUserDoc) {
+                          double rating = 0.0;
+                          int ratingCount = 0;
+
+                          if (snapUserDoc.hasData &&
+                              snapUserDoc.data!.data() != null) {
+                            final data = snapUserDoc.data!.data()!;
+                            rating =
+                                (data['rating'] as num?)?.toDouble() ?? 0.0;
+                            ratingCount =
+                                (data['ratingCount'] as num?)?.toInt() ?? 0;
+                          }
+
+                          // value hiển thị: "4.8" hoặc "0.0"
+                          final valueText = rating.toStringAsFixed(1);
+
+                          return _StatCard(
+                            title: ratingCount > 0
+                                ? 'Rating ($ratingCount đánh giá)'
+                                : 'Rating',
+                            value: valueText,
+                            icon: Icons.star,
+                            color:
+                            Colors.amber[700] ?? Colors.amber,
+                            onTap: () {},
+                          );
+                        },
                       ),
                     ),
                   ],
@@ -246,7 +276,8 @@ class TutorDashboardScreen extends StatelessWidget {
             StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
               stream: upcomingStream,
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
+                if (snapshot.connectionState ==
+                    ConnectionState.waiting) {
                   return Container(
                     margin: const EdgeInsets.only(top: 8),
                     child: const Center(
@@ -297,11 +328,13 @@ class TutorDashboardScreen extends StatelessWidget {
                     final data = doc.data();
                     final start =
                     (data['startAt'] as Timestamp).toDate();
-                    final end = (data['endAt'] as Timestamp).toDate();
+                    final end =
+                    (data['endAt'] as Timestamp).toDate();
                     final subject =
                     (data['subject'] ?? '').toString();
                     final studentName =
-                    (data['studentName'] ?? 'Học viên').toString();
+                    (data['studentName'] ?? 'Học viên')
+                        .toString();
 
                     final rawTotal =
                         data['totalPrice'] ?? data['price'] ?? 0;
@@ -322,8 +355,7 @@ class TutorDashboardScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                         boxShadow: [
                           BoxShadow(
-                            color:
-                            Colors.black12.withOpacity(0.03),
+                            color: Colors.black12.withOpacity(0.03),
                             blurRadius: 4,
                             offset: const Offset(0, 2),
                           ),
@@ -341,7 +373,8 @@ class TutorDashboardScreen extends StatelessWidget {
                                       ? 'Môn học'
                                       : subject,
                                   style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
+                                    fontWeight:
+                                    FontWeight.w700,
                                     fontSize: 14,
                                   ),
                                 ),
@@ -368,9 +401,10 @@ class TutorDashboardScreen extends StatelessWidget {
                                 child: Text(
                                   studentName,
                                   maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style:
-                                  const TextStyle(fontSize: 13),
+                                  overflow:
+                                  TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                      fontSize: 13),
                                 ),
                               ),
                             ],
@@ -386,15 +420,16 @@ class TutorDashboardScreen extends StatelessWidget {
                               const SizedBox(width: 4),
                               Text(
                                 '${dfTime.format(start)} - ${dfTime.format(end)}',
-                                style:
-                                const TextStyle(fontSize: 13),
+                                style: const TextStyle(
+                                    fontSize: 13),
                               ),
                               const Spacer(),
                               Text(
                                 _fmtVnd(total),
                                 style: const TextStyle(
                                   fontSize: 13,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight:
+                                  FontWeight.w600,
                                   color: Colors.green,
                                 ),
                               ),

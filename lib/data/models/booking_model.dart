@@ -1,11 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class BookingStatus {
-  static const requested = 'requested';
-  static const accepted = 'accepted';
-  static const rejected = 'rejected';
-  static const cancelled = 'cancelled';
-  static const completed = 'completed';
+  static const String requested = 'requested';
+  static const String accepted = 'accepted';
+  static const String rejected = 'rejected';
+  static const String cancelled = 'cancelled';
+  static const String completed = 'completed';
 }
 
 class BookingModel {
@@ -13,33 +13,41 @@ class BookingModel {
   final String tutorId;
   final String studentId;
 
-  /// Lưu thêm tên để hiển thị nhanh, tránh phải join.
   final String tutorName;
   final String studentName;
-
   final String subject;
 
-  /// Giá / giờ tại thời điểm booking
   final double pricePerHour;
-
-  /// Số giờ của buổi học (ví dụ: 1.0, 1.5, 2.0)
   final double hours;
-
-  /// Tổng tiền của buổi học (totalPrice)
   final double price;
 
   final String note;
+
   final DateTime startAt;
   final DateTime endAt;
+
   final String status;
+
   final bool paid;
   final String? paymentMethod;
+
   final String? cancelReason;
+
   final DateTime createdAt;
   final DateTime? updatedAt;
 
-  /// Hình thức học: online / offline_at_student / offline_at_tutor
-  final String mode;
+  final String mode; // online / offline_at_student / offline_at_tutor
+
+  // Đánh giá
+  final double? rating;
+  final String? review;
+  final DateTime? ratedAt;
+
+  // Thông tin gói
+  final String? packageType;   // 'single' | '1m' | '3m' | '6m'
+  final String? packageId;     // id chung cho cả gói
+  final int? sessionIndex;     // buổi thứ mấy trong gói
+  final int? totalSessions;    // tổng số buổi trong gói
 
   BookingModel({
     required this.id,
@@ -56,22 +64,23 @@ class BookingModel {
     required this.endAt,
     required this.status,
     required this.paid,
-    this.paymentMethod,
-    this.cancelReason,
+    required this.paymentMethod,
+    required this.cancelReason,
     required this.createdAt,
-    this.updatedAt,
-    this.mode = 'online',
+    required this.updatedAt,
+    required this.mode,
+    required this.rating,
+    required this.review,
+    required this.ratedAt,
+    required this.packageType,
+    required this.packageId,
+    required this.sessionIndex,
+    required this.totalSessions,
   });
 
-  factory BookingModel.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
-    final data = doc.data()!;
-
-    double _toDouble(dynamic v) {
-      if (v is int) return v.toDouble();
-      if (v is num) return v.toDouble();
-      if (v is String) return double.tryParse(v) ?? 0;
-      return 0;
-    }
+  factory BookingModel.fromDoc(
+      QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data();
 
     DateTime _toDate(dynamic v) {
       if (v is Timestamp) return v.toDate();
@@ -79,34 +88,35 @@ class BookingModel {
       return DateTime.now();
     }
 
-    // Đọc dữ liệu cũ vẫn OK
-    final price = _toDouble(data['totalPrice'] ?? data['price'] ?? 0);
-    final hours = _toDouble(data['hours'] ?? 1);
-    final pricePerHour = _toDouble(
-      data['pricePerHour'] ?? (hours > 0 ? price / hours : 0),
-    );
-
     return BookingModel(
       id: doc.id,
-      tutorId: (data['tutorId'] ?? '').toString(),
-      studentId: (data['studentId'] ?? '').toString(),
-      tutorName: (data['tutorName'] ?? '').toString(),
-      studentName: (data['studentName'] ?? '').toString(),
-      subject: (data['subject'] ?? '').toString(),
-      pricePerHour: pricePerHour,
-      hours: hours,
-      price: price,
-      note: (data['note'] ?? '').toString(),
+      tutorId: (data['tutorId'] ?? '') as String,
+      studentId: (data['studentId'] ?? '') as String,
+      tutorName: (data['tutorName'] ?? '') as String,
+      studentName: (data['studentName'] ?? '') as String,
+      subject: (data['subject'] ?? '') as String,
+      pricePerHour: (data['pricePerHour'] as num?)?.toDouble() ?? 0,
+      hours: (data['hours'] as num?)?.toDouble() ?? 0,
+      price: (data['price'] as num?)?.toDouble() ?? 0,
+      note: (data['note'] ?? '') as String,
       startAt: _toDate(data['startAt']),
       endAt: _toDate(data['endAt']),
-      status: (data['status'] ?? BookingStatus.requested).toString(),
-      paid: data['paid'] == true,
-      paymentMethod: data['paymentMethod']?.toString(),
-      cancelReason: data['cancelReason']?.toString(),
+      status: (data['status'] ?? BookingStatus.requested) as String,
+      paid: (data['paid'] ?? false) as bool,
+      paymentMethod: data['paymentMethod'] as String?,
+      cancelReason: data['cancelReason'] as String?,
       createdAt: _toDate(data['createdAt']),
       updatedAt:
-      data['updatedAt'] != null ? _toDate(data['updatedAt']) : null,
-      mode: (data['mode'] ?? 'online').toString(),
+      data['updatedAt'] == null ? null : _toDate(data['updatedAt']),
+      mode: (data['mode'] ?? 'online') as String,
+      rating: (data['rating'] as num?)?.toDouble(),
+      review: data['review'] as String?,
+      ratedAt:
+      data['ratedAt'] == null ? null : _toDate(data['ratedAt']),
+      packageType: data['packageType'] as String?,
+      packageId: data['packageId'] as String?,
+      sessionIndex: data['sessionIndex'] as int?,
+      totalSessions: data['totalSessions'] as int?,
     );
   }
 
@@ -120,7 +130,6 @@ class BookingModel {
       'pricePerHour': pricePerHour,
       'hours': hours,
       'price': price,
-      'totalPrice': price,
       'note': note,
       'startAt': Timestamp.fromDate(startAt),
       'endAt': Timestamp.fromDate(endAt),
@@ -130,39 +139,15 @@ class BookingModel {
       'cancelReason': cancelReason,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt':
-      updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
+      updatedAt == null ? null : Timestamp.fromDate(updatedAt!),
       'mode': mode,
+      'rating': rating,
+      'review': review,
+      'ratedAt': ratedAt == null ? null : Timestamp.fromDate(ratedAt!),
+      'packageType': packageType,
+      'packageId': packageId,
+      'sessionIndex': sessionIndex,
+      'totalSessions': totalSessions,
     };
-  }
-
-  BookingModel copyWith({
-    String? status,
-    bool? paid,
-    String? paymentMethod,
-    String? cancelReason,
-    DateTime? updatedAt,
-    String? mode,
-  }) {
-    return BookingModel(
-      id: id,
-      tutorId: tutorId,
-      studentId: studentId,
-      tutorName: tutorName,
-      studentName: studentName,
-      subject: subject,
-      pricePerHour: pricePerHour,
-      hours: hours,
-      price: price,
-      note: note,
-      startAt: startAt,
-      endAt: endAt,
-      status: status ?? this.status,
-      paid: paid ?? this.paid,
-      paymentMethod: paymentMethod ?? this.paymentMethod,
-      cancelReason: cancelReason ?? this.cancelReason,
-      createdAt: createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
-      mode: mode ?? this.mode,
-    );
   }
 }

@@ -15,7 +15,11 @@ class UserModel {
   final String? bio;
   final double? price;
   final String? experience;
-  final String? availabilityNote; // 🆕 lịch rảnh
+  final String? availabilityNote; // lịch rảnh dạng text
+
+  // ⭐ rating tổng quát của tutor
+  final double? rating;
+  final int? ratingCount;
 
   UserModel({
     required this.uid,
@@ -30,6 +34,8 @@ class UserModel {
     this.price,
     this.experience,
     this.availabilityNote,
+    this.rating,
+    this.ratingCount,
   });
 
   factory UserModel.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -40,6 +46,14 @@ class UserModel {
       if (v is int) return v.toDouble();
       if (v is num) return v.toDouble();
       if (v is String) return double.tryParse(v);
+      return null;
+    }
+
+    int? _toInt(dynamic v) {
+      if (v == null) return null;
+      if (v is int) return v;
+      if (v is num) return v.toInt();
+      if (v is String) return int.tryParse(v);
       return null;
     }
 
@@ -55,7 +69,9 @@ class UserModel {
       bio: data['bio']?.toString(),
       price: _toDouble(data['price']),
       experience: data['experience']?.toString(),
-      availabilityNote: data['availabilityNote']?.toString(), // 🆕
+      availabilityNote: data['availabilityNote']?.toString(),
+      rating: _toDouble(data['rating']),
+      ratingCount: _toInt(data['ratingCount']),
     );
   }
 
@@ -71,7 +87,9 @@ class UserModel {
       'bio': bio,
       'price': price,
       'experience': experience,
-      'availabilityNote': availabilityNote, // 🆕
+      'availabilityNote': availabilityNote,
+      'rating': rating,
+      'ratingCount': ratingCount,
     };
   }
 
@@ -85,6 +103,8 @@ class UserModel {
     String? experience,
     bool? isTutorVerified,
     String? availabilityNote,
+    double? rating,
+    int? ratingCount,
   }) {
     return UserModel(
       uid: uid,
@@ -99,6 +119,8 @@ class UserModel {
       price: price ?? this.price,
       experience: experience ?? this.experience,
       availabilityNote: availabilityNote ?? this.availabilityNote,
+      rating: rating ?? this.rating,
+      ratingCount: ratingCount ?? this.ratingCount,
     );
   }
 }

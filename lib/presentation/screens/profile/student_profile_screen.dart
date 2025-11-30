@@ -8,6 +8,9 @@ import 'package:tutor_app/presentation/provider/auth_provider.dart';
 import 'package:tutor_app/presentation/provider/tutor_provider.dart';
 import 'package:tutor_app/data/models/tutor_model.dart';
 
+// ⭐ THÊM import màn lịch học
+import 'package:tutor_app/presentation/screens/student/student_my_lessons_screen.dart';
+
 class StudentProfileScreen extends StatelessWidget {
   const StudentProfileScreen({super.key});
 
@@ -20,7 +23,6 @@ class StudentProfileScreen extends StatelessWidget {
       if (avatarUrl.startsWith('http')) {
         return NetworkImage(avatarUrl);
       } else {
-        // base64
         final bytes = base64Decode(avatarUrl);
         return MemoryImage(bytes);
       }
@@ -100,7 +102,7 @@ class StudentProfileScreen extends StatelessWidget {
             const SizedBox(height: 12),
 
             // 🎯 Student goal
-            if (user.role == 'student') ...[
+            if (user.role == 'student')
               if (user.goal != null && user.goal!.isNotEmpty)
                 Container(
                   padding:
@@ -118,9 +120,8 @@ class StudentProfileScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-            ],
 
-            // 👨‍🏫 Tutor info từ TutorModel nếu user = tutor
+            // 👨‍🏫 Tutor info (nếu là tutor)
             if (isTutor && tutor != null) ...[
               const SizedBox(height: 16),
               Wrap(
@@ -184,27 +185,39 @@ class StudentProfileScreen extends StatelessWidget {
 
             const SizedBox(height: 32),
 
-            // 🔹 Edit Profile (dùng chung)
+            // 🔹 Edit Profile
             _profileTile(
               icon: Icons.edit,
               color: Colors.blueAccent,
               title: "Edit Profile",
-              onTap: () => Navigator.pushNamed(
-                context,
-                AppRouter.editProfile,
-              ),
+              onTap: () =>
+                  Navigator.pushNamed(context, AppRouter.editProfile),
             ),
 
-            // 🎓 Apply Tutor (chỉ student mới thấy)
+            // 📆 Lịch học của tôi (ONLY student)
+            if (user.role == 'student')
+              _profileTile(
+                icon: Icons.calendar_month,
+                color: Colors.teal,
+                title: "Lịch học của tôi",
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const StudentMyLessonsScreen(),
+                    ),
+                  );
+                },
+              ),
+
+            // 🎓 Apply Tutor (chỉ student)
             if (user.role == 'student')
               _profileTile(
                 icon: Icons.school_outlined,
                 color: Colors.deepPurple,
                 title: "Apply to Become a Tutor",
-                onTap: () => Navigator.pushNamed(
-                  context,
-                  AppRouter.applyTutor,
-                ),
+                onTap: () =>
+                    Navigator.pushNamed(context, AppRouter.applyTutor),
               ),
 
             const SizedBox(height: 16),
@@ -264,8 +277,8 @@ class StudentProfileScreen extends StatelessWidget {
             fontWeight: FontWeight.w500,
           ),
         ),
-        trailing: const Icon(Icons.arrow_forward_ios,
-            size: 16, color: Colors.grey),
+        trailing:
+        const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
         onTap: onTap,
       ),
     );

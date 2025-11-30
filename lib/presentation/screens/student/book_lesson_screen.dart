@@ -6,7 +6,6 @@ import 'package:provider/provider.dart';
 
 import 'package:tutor_app/config/theme.dart';
 import 'package:tutor_app/data/models/tutor_model.dart';
-import 'package:tutor_app/data/models/booking_model.dart';
 import 'package:tutor_app/presentation/provider/auth_provider.dart';
 import 'package:tutor_app/presentation/provider/booking_provider.dart';
 
@@ -41,11 +40,17 @@ class BookLessonScreen extends StatefulWidget {
 
 class _BookLessonScreenState extends State<BookLessonScreen> {
   String? _selectedSubject;
-  String _mode = 'online'; // online / offline_at_student / offline_at_tutor
+  String _mode = 'online';
   DateTime _selectedDate = DateTime.now().add(const Duration(days: 1));
   TimeOfDay _start = const TimeOfDay(hour: 19, minute: 0);
   int _durationMinutes = 60;
   final TextEditingController _noteCtrl = TextEditingController();
+
+  /// 'single' | '1m' | '3m' | '6m'
+  String _packageType = 'single';
+
+  /// Các thứ trong tuần được chọn (1=Mon ... 7=Sun)
+  List<int> _selectedWeekdays = [DateTime.monday];
 
   bool _saving = false;
 
@@ -63,9 +68,46 @@ class _BookLessonScreenState extends State<BookLessonScreen> {
 
   double get hours => _durationMinutes / 60.0;
 
-  double get totalPrice {
-    final pricePerHour = widget.tutor.price;
-    return pricePerHour * hours;
+  int get _weeks {
+    switch (_packageType) {
+      case '1m':
+        return 4;
+      case '3m':
+        return 12;
+      case '6m':
+        return 24;
+      default:
+        return 0;
+    }
+  }
+
+  int get _estimatedTotalSessions {
+    if (_packageType == 'single') return 1;
+    if (_weeks == 0 || _selectedWeekdays.isEmpty) return 0;
+    return _weeks * _selectedWeekdays.length;
+  }
+
+  double get _singlePrice => widget.tutor.price * hours;
+
+  double get _packageTotalPrice {
+    if (_packageType == 'single') return _singlePrice;
+
+    double discount;
+    switch (_packageType) {
+      case '1m':
+        discount = 0.05;
+        break;
+      case '3m':
+        discount = 0.1;
+        break;
+      case '6m':
+        discount = 0.15;
+        break;
+      default:
+        discount = 0.0;
+    }
+    final raw = _singlePrice * _estimatedTotalSessions;
+    return raw * (1 - discount);
   }
 
   Future<void> _pickDate() async {
@@ -91,7 +133,10 @@ class _BookLessonScreenState extends State<BookLessonScreen> {
     }
   }
 
-  Future<void> _createBooking() async {
+  DateTime _combine(DateTime d, TimeOfDay t) =>
+      DateTime(d.year, d.month, d.day, t.hour, t.minute);
+
+  Future<void> _submit() async {
     final auth = context.read<AppAuthProvider>();
     final bookingProvider = context.read<BookingProvider>();
     final student = auth.user;
@@ -103,51 +148,72 @@ class _BookLessonScreenState extends State<BookLessonScreen> {
       return;
     }
 
-    DateTime combine(DateTime d, TimeOfDay t) =>
-        DateTime(d.year, d.month, d.day, t.hour, t.minute);
+    final tutor = widget.tutor;
 
-    final startAt = combine(_selectedDate, _start);
-    final endAt = startAt.add(Duration(minutes: _durationMinutes));
-
-    if (!endAt.isAfter(startAt)) {
+    // Gói tháng thì bắt buộc chọn ít nhất 1 ngày trong tuần
+    if (_packageType != 'single' && _selectedWeekdays.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Thời lượng không hợp lệ.')),
+        const SnackBar(
+          content: Text('Hãy chọn ít nhất một ngày học trong tuần.'),
+        ),
       );
       return;
     }
 
-    final tutor = widget.tutor;
-
     setState(() => _saving = true);
 
     try {
-      final booking = BookingModel(
-        id: '',
-        tutorId: tutor.uid,
-        studentId: student.uid,
-        tutorName: tutor.name,
-        studentName: student.displayName ?? 'Student',
-        subject: _selectedSubject ?? tutor.subject,
-        pricePerHour: tutor.price,
-        hours: hours,
-        price: totalPrice, // totalPrice = pricePerHour * hours
-        note: _noteCtrl.text.trim(),
-        startAt: startAt,
-        endAt: endAt,
-        status: BookingStatus.requested,
-        paid: false,
-        paymentMethod: null,
-        cancelReason: null,
-        createdAt: DateTime.now(),
-        updatedAt: null,
-        mode: _mode,
-      );
+      final startAt = _combine(_selectedDate, _start);
+      final endAt = startAt.add(Duration(minutes: _durationMinutes));
 
-      await bookingProvider.createBooking(booking);
+      if (!endAt.isAfter(startAt)) {
+        throw Exception('Thời lượng không hợp lệ');
+      }
+
+      if (_packageType == 'single') {
+        // 🔹 1 BUỔI LẺ
+        await bookingProvider.createSingleBooking(
+          tutorId: tutor.uid,
+          tutorName: tutor.name,
+          studentId: student.uid,
+          studentName: student.displayName ?? 'Student',
+          subject: _selectedSubject ?? tutor.subject,
+          pricePerHour: tutor.price,
+          hours: hours,
+          startAt: startAt,
+          endAt: endAt,
+          note: _noteCtrl.text.trim(),
+          mode: _mode,
+        );
+      } else {
+        // 🔹 GÓI NHIỀU BUỔI – BookingProvider tự tạo packageId
+        await bookingProvider.createPackageBookings(
+          tutorId: tutor.uid,
+          tutorName: tutor.name,
+          studentId: student.uid,
+          studentName: student.displayName ?? 'Student',
+          subject: _selectedSubject ?? tutor.subject,
+          pricePerHour: tutor.price,
+          hours: hours,
+          startDate: _selectedDate,
+          timeStart: _start,
+          timeEnd: TimeOfDay(hour: endAt.hour, minute: endAt.minute),
+          packageType: _packageType,
+          weekdays: _selectedWeekdays,
+          note: _noteCtrl.text.trim(),
+          mode: _mode,
+        );
+      }
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Đã gửi yêu cầu. Chờ gia sư xác nhận.')),
+        SnackBar(
+          content: Text(
+            _packageType == 'single'
+                ? 'Đã gửi yêu cầu. Chờ gia sư xác nhận.'
+                : 'Đã tạo yêu cầu gói học. Chờ gia sư xác nhận.',
+          ),
+        ),
       );
       Navigator.pop(context);
     } catch (e) {
@@ -158,6 +224,40 @@ class _BookLessonScreenState extends State<BookLessonScreen> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  Widget _weekdayChip(String label, int weekday) {
+    final isSelected = _selectedWeekdays.contains(weekday);
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          if (isSelected) {
+            _selectedWeekdays.remove(weekday);
+          } else {
+            _selectedWeekdays.add(weekday);
+          }
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        margin: const EdgeInsets.only(right: 6, bottom: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.primaryColor : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color:
+            isSelected ? AppTheme.primaryColor : Colors.grey.shade300,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : AppTheme.primaryColor,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -179,7 +279,7 @@ class _BookLessonScreenState extends State<BookLessonScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header tutor summary + availability
+            // ===== Header tutor =====
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
@@ -231,7 +331,8 @@ class _BookLessonScreenState extends State<BookLessonScreen> {
                             const SizedBox(height: 4),
                             Text(
                               tutor.subject,
-                              style: const TextStyle(color: Colors.grey),
+                              style:
+                              const TextStyle(color: Colors.grey),
                             ),
                             const SizedBox(height: 6),
                             Row(
@@ -259,30 +360,6 @@ class _BookLessonScreenState extends State<BookLessonScreen> {
                       ),
                     ],
                   ),
-
-                  const SizedBox(height: 8),
-
-                  if (tutor.availabilityNote.isNotEmpty)
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(
-                          Icons.schedule_outlined,
-                          size: 16,
-                          color: Colors.indigo,
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            'Thời gian rảnh: ${tutor.availabilityNote}',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.black87,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
                 ],
               ),
             ),
@@ -290,21 +367,25 @@ class _BookLessonScreenState extends State<BookLessonScreen> {
             const SizedBox(height: 16),
 
             const Text(
-              "Thông tin buổi học",
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              "Thông tin buổi học / gói học",
+              style:
+              TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 12),
 
             // Môn học
             Text("Môn học",
-                style: TextStyle(color: Colors.grey[700], fontSize: 13)),
+                style: TextStyle(
+                    color: Colors.grey[700], fontSize: 13)),
             const SizedBox(height: 4),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.grey.shade300),
+                border:
+                Border.all(color: Colors.grey.shade300),
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
@@ -315,8 +396,94 @@ class _BookLessonScreenState extends State<BookLessonScreen> {
                       child: Text(tutor.subject),
                     ),
                   ],
-                  onChanged: (v) => setState(() => _selectedSubject = v),
+                  onChanged: (v) =>
+                      setState(() => _selectedSubject = v),
                 ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Loại đặt lịch
+            Text("Loại đặt lịch",
+                style: TextStyle(
+                    color: Colors.grey[700], fontSize: 13)),
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 8, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border:
+                Border.all(color: Colors.grey.shade300),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  RadioListTile<String>(
+                    value: 'single',
+                    groupValue: _packageType,
+                    onChanged: (v) =>
+                        setState(() => _packageType = v ?? 'single'),
+                    title: const Text('1 buổi lẻ'),
+                    dense: true,
+                  ),
+                  RadioListTile<String>(
+                    value: '1m',
+                    groupValue: _packageType,
+                    onChanged: (v) =>
+                        setState(() => _packageType = v ?? '1m'),
+                    title: const Text('Gói 1 tháng'),
+                    dense: true,
+                  ),
+                  RadioListTile<String>(
+                    value: '3m',
+                    groupValue: _packageType,
+                    onChanged: (v) =>
+                        setState(() => _packageType = v ?? '3m'),
+                    title: const Text('Gói 3 tháng'),
+                    dense: true,
+                  ),
+                  RadioListTile<String>(
+                    value: '6m',
+                    groupValue: _packageType,
+                    onChanged: (v) =>
+                        setState(() => _packageType = v ?? '6m'),
+                    title: const Text('Gói 6 tháng'),
+                    dense: true,
+                  ),
+
+                  if (_packageType != 'single') ...[
+                    const Divider(),
+                    const Text(
+                      'Chọn các ngày học trong tuần:',
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      children: [
+                        _weekdayChip('T2', DateTime.monday),
+                        _weekdayChip('T3', DateTime.tuesday),
+                        _weekdayChip('T4', DateTime.wednesday),
+                        _weekdayChip('T5', DateTime.thursday),
+                        _weekdayChip('T6', DateTime.friday),
+                        _weekdayChip('T7', DateTime.saturday),
+                        _weekdayChip('CN', DateTime.sunday),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Ước tính ~ $_estimatedTotalSessions buổi',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
 
@@ -324,15 +491,17 @@ class _BookLessonScreenState extends State<BookLessonScreen> {
 
             // Hình thức
             Text("Hình thức học",
-                style: TextStyle(color: Colors.grey[700], fontSize: 13)),
+                style: TextStyle(
+                    color: Colors.grey[700], fontSize: 13)),
             const SizedBox(height: 4),
             Container(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.grey.shade300),
+                border:
+                Border.all(color: Colors.grey.shade300),
               ),
               child: Column(
                 children: [
@@ -341,7 +510,8 @@ class _BookLessonScreenState extends State<BookLessonScreen> {
                     groupValue: _mode,
                     onChanged: (v) =>
                         setState(() => _mode = v ?? 'online'),
-                    title: const Text('Online (Google Meet / Zoom)'),
+                    title: const Text(
+                        'Online (Google Meet / Zoom)'),
                     dense: true,
                   ),
                   RadioListTile<String>(
@@ -349,15 +519,17 @@ class _BookLessonScreenState extends State<BookLessonScreen> {
                     groupValue: _mode,
                     onChanged: (v) => setState(
                             () => _mode = v ?? 'offline_at_student'),
-                    title: const Text('Offline tại nhà học viên'),
+                    title: const Text(
+                        'Offline tại nhà học viên'),
                     dense: true,
                   ),
                   RadioListTile<String>(
                     value: 'offline_at_tutor',
                     groupValue: _mode,
-                    onChanged: (v) =>
-                        setState(() => _mode = v ?? 'offline_at_tutor'),
-                    title: const Text('Offline tại nhà gia sư'),
+                    onChanged: (v) => setState(
+                            () => _mode = v ?? 'offline_at_tutor'),
+                    title: const Text(
+                        'Offline tại nhà gia sư'),
                     dense: true,
                   ),
                 ],
@@ -367,23 +539,26 @@ class _BookLessonScreenState extends State<BookLessonScreen> {
             const SizedBox(height: 16),
 
             // Thời gian
-            Text("Thời gian",
-                style: TextStyle(color: Colors.grey[700], fontSize: 13)),
+            Text("Thời gian bắt đầu (cho buổi đầu tiên)",
+                style: TextStyle(
+                    color: Colors.grey[700], fontSize: 13)),
             const SizedBox(height: 4),
             Container(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 8, vertical: 6),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.grey.shade300),
+                border:
+                Border.all(color: Colors.grey.shade300),
               ),
               child: Column(
                 children: [
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.event),
-                    title: const Text("Ngày học"),
+                    title: const Text(
+                        "Ngày học (buổi đầu tiên)"),
                     subtitle: Text(df.format(_selectedDate)),
                     trailing: TextButton(
                       onPressed: _pickDate,
@@ -405,20 +580,23 @@ class _BookLessonScreenState extends State<BookLessonScreen> {
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.timelapse),
-                    title: const Text("Thời lượng"),
+                    title: const Text("Thời lượng 1 buổi"),
                     subtitle: Text("$_durationMinutes phút"),
                     trailing: DropdownButton<int>(
                       value: _durationMinutes,
                       items: const [
                         DropdownMenuItem(
-                            value: 60, child: Text("60 phút")),
+                            value: 60,
+                            child: Text("60 phút")),
                         DropdownMenuItem(
-                            value: 90, child: Text("90 phút")),
+                            value: 90,
+                            child: Text("90 phút")),
                         DropdownMenuItem(
-                            value: 120, child: Text("120 phút")),
+                            value: 120,
+                            child: Text("120 phút")),
                       ],
-                      onChanged: (v) =>
-                          setState(() => _durationMinutes = v ?? 60),
+                      onChanged: (v) => setState(
+                              () => _durationMinutes = v ?? 60),
                     ),
                   ),
                 ],
@@ -429,18 +607,21 @@ class _BookLessonScreenState extends State<BookLessonScreen> {
 
             // Ghi chú
             Text("Ghi chú cho gia sư (tuỳ chọn)",
-                style: TextStyle(color: Colors.grey[700], fontSize: 13)),
+                style: TextStyle(
+                    color: Colors.grey[700], fontSize: 13)),
             const SizedBox(height: 4),
             TextField(
               controller: _noteCtrl,
               maxLines: 3,
               decoration: InputDecoration(
-                hintText: 'Ví dụ: Ôn lại chương 1, học qua Zoom...',
+                hintText:
+                'Ví dụ: Ôn lại chương 1, học qua Zoom...',
                 filled: true,
                 fillColor: Colors.white,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
+                  borderSide: BorderSide(
+                      color: Colors.grey.shade300),
                 ),
               ),
             ),
@@ -453,7 +634,8 @@ class _BookLessonScreenState extends State<BookLessonScreen> {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.green.shade100),
+                border: Border.all(
+                    color: Colors.green.shade100),
               ),
               child: Row(
                 children: [
@@ -461,13 +643,18 @@ class _BookLessonScreenState extends State<BookLessonScreen> {
                       color: Colors.green),
                   const SizedBox(width: 10),
                   const Text(
-                    "Tổng tiền:",
+                    "Tổng dự kiến:",
                     style: TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w600),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600),
                   ),
                   const Spacer(),
                   Text(
-                    _fmtVnd(totalPrice),
+                    _fmtVnd(
+                      _packageType == 'single'
+                          ? _singlePrice
+                          : _packageTotalPrice,
+                    ),
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w800,
@@ -489,13 +676,14 @@ class _BookLessonScreenState extends State<BookLessonScreen> {
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
                 ),
-                onPressed: _saving ? null : _createBooking,
+                onPressed: _saving ? null : _submit,
                 icon: const Icon(Icons.check_circle_outline),
                 label: _saving
                     ? const Text("Đang tạo...")
                     : const Text(
                   "Xác nhận đặt lịch",
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold),
                 ),
               ),
             ),

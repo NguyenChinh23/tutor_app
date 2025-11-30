@@ -24,6 +24,9 @@ class _TutorBookingRequestsScreenState
     extends State<TutorBookingRequestsScreen> {
   bool _initialized = false;
 
+  /// Những group đã xử lý (accepted / rejected) => ẩn khỏi UI ngay
+  final Set<String> _hiddenGroupIds = {};
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -54,8 +57,22 @@ class _TutorBookingRequestsScreenState
     final dfDate = DateFormat('dd/MM/yyyy');
     final dfTime = DateFormat('HH:mm');
 
-    final requests = booking.tutorBookings
+    // ====== Tất cả booking status=requested ======
+    final allRequests = booking.tutorBookings
         .where((b) => b.status == BookingStatus.requested)
+        .toList();
+
+    // ====== GROUP THEO packageId (nếu null thì mỗi booking là 1 group) ======
+    final Map<String, List<BookingModel>> grouped = {};
+    for (final b in allRequests) {
+      final key =
+      (b.packageId == null || b.packageId!.isEmpty) ? b.id : b.packageId!;
+      grouped.putIfAbsent(key, () => []).add(b);
+    }
+
+    // Lọc bỏ các group đã xử lý (đã ẩn)
+    final groups = grouped.entries
+        .where((e) => !_hiddenGroupIds.contains(e.key))
         .toList();
 
     return Scaffold(
@@ -64,7 +81,7 @@ class _TutorBookingRequestsScreenState
         backgroundColor: primary,
       ),
       backgroundColor: const Color(0xFFF5F7FA),
-      body: requests.isEmpty
+      body: groups.isEmpty
           ? Center(
         child: Text(
           'Hiện chưa có yêu cầu đặt lịch nào.',
@@ -73,9 +90,18 @@ class _TutorBookingRequestsScreenState
       )
           : ListView.builder(
         padding: const EdgeInsets.all(16),
-        itemCount: requests.length,
+        itemCount: groups.length,
         itemBuilder: (context, index) {
-          final b = requests[index];
+          final entry = groups[index];
+          final groupId = entry.key;        // 👈 dùng để ẩn group
+          final sessions = entry.value;
+
+          // Buổi đầu để hiển thị
+          final first = sessions.first;
+
+          final bool isPackage =
+              (first.packageId != null && first.packageId!.isNotEmpty) &&
+                  sessions.length > 1;
 
           return Container(
             margin: const EdgeInsets.only(bottom: 12),
@@ -99,7 +125,7 @@ class _TutorBookingRequestsScreenState
                   children: [
                     Expanded(
                       child: Text(
-                        'Học viên: ${b.studentId.substring(0, 6)}...',
+                        'Học viên: ${first.studentName.isNotEmpty ? first.studentName : first.studentId.substring(0, 6) + '...'}',
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
@@ -108,7 +134,7 @@ class _TutorBookingRequestsScreenState
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      b.subject.isEmpty ? 'Môn học' : b.subject,
+                      first.subject.isEmpty ? 'Môn học' : first.subject,
                       style: TextStyle(
                         color: Colors.grey[700],
                         fontSize: 13,
@@ -116,16 +142,28 @@ class _TutorBookingRequestsScreenState
                     ),
                   ],
                 ),
+                const SizedBox(height: 4),
+
+                if (isPackage)
+                  Text(
+                    'Gói ~ ${sessions.length} buổi',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.blueGrey,
+                    ),
+                  ),
+
                 const SizedBox(height: 6),
 
-                // Dòng 2: Ngày + khung giờ
+                // Dòng 2: Ngày + khung giờ của buổi đầu
                 Row(
                   children: [
                     const Icon(Icons.event,
                         size: 16, color: Colors.indigo),
                     const SizedBox(width: 4),
                     Text(
-                      dfDate.format(b.startAt),
+                      dfDate.format(first.startAt),
                       style: const TextStyle(fontSize: 13),
                     ),
                     const SizedBox(width: 10),
@@ -133,21 +171,23 @@ class _TutorBookingRequestsScreenState
                         size: 16, color: Colors.grey),
                     const SizedBox(width: 4),
                     Text(
-                      '${dfTime.format(b.startAt)} - ${dfTime.format(b.endAt)}',
+                      '${dfTime.format(first.startAt)} - ${dfTime.format(first.endAt)}',
                       style: const TextStyle(fontSize: 13),
                     ),
                   ],
                 ),
                 const SizedBox(height: 4),
 
-                // Dòng 3: Tiền
+                // Dòng 3: Tiền buổi đầu
                 Row(
                   children: [
                     const Icon(Icons.payments_outlined,
                         size: 16, color: Colors.green),
                     const SizedBox(width: 4),
                     Text(
-                      'Dự kiến: ${_fmtVnd(b.price)}',
+                      isPackage
+                          ? 'Dự kiến: ${_fmtVnd(first.price)} / buổi'
+                          : 'Dự kiến: ${_fmtVnd(first.price)}',
                       style: const TextStyle(
                         color: Colors.green,
                         fontWeight: FontWeight.w600,
@@ -157,10 +197,10 @@ class _TutorBookingRequestsScreenState
                   ],
                 ),
 
-                if (b.note.isNotEmpty) ...[
+                if (first.note.isNotEmpty) ...[
                   const SizedBox(height: 6),
                   Text(
-                    'Ghi chú: ${b.note}',
+                    'Ghi chú: ${first.note}',
                     style: TextStyle(
                       fontSize: 13,
                       color: Colors.grey[800],
@@ -172,7 +212,7 @@ class _TutorBookingRequestsScreenState
 
                 Row(
                   children: [
-                    // ❌ TỪ CHỐI
+                    // ❌ TỪ CHỐI (buổi lẻ hoặc cả gói)
                     Expanded(
                       child: OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
@@ -180,16 +220,33 @@ class _TutorBookingRequestsScreenState
                               color: Colors.redAccent),
                         ),
                         onPressed: () async {
-                          await booking.updateStatus(
-                            bookingId: b.id,
-                            status: BookingStatus.rejected,
-                          );
+                          if (isPackage &&
+                              first.packageId != null &&
+                              first.packageId!.isNotEmpty) {
+                            await booking.updateBookingStatusGroup(
+                              first.packageId!,
+                              BookingStatus.rejected,
+                            );
+                          } else {
+                            await booking.updateBookingStatus(
+                              first.id,
+                              BookingStatus.rejected,
+                            );
+                          }
+
+                          // Ẩn group khỏi UI ngay
+                          setState(() {
+                            _hiddenGroupIds.add(groupId);
+                          });
+
                           if (context.mounted) {
-                            ScaffoldMessenger.of(context)
-                                .showSnackBar(
-                              const SnackBar(
-                                content:
-                                Text('Đã từ chối yêu cầu.'),
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  isPackage
+                                      ? 'Đã từ chối yêu cầu gói.'
+                                      : 'Đã từ chối yêu cầu.',
+                                ),
                               ),
                             );
                           }
@@ -198,47 +255,65 @@ class _TutorBookingRequestsScreenState
                             color: Colors.redAccent, size: 18),
                         label: const Text(
                           'Từ chối',
-                          style: TextStyle(
-                              color: Colors.redAccent),
+                          style: TextStyle(color: Colors.redAccent),
                         ),
                       ),
                     ),
                     const SizedBox(width: 10),
 
-                    // ✅ CHẤP NHẬN
+                    // ✅ CHẤP NHẬN (buổi lẻ hoặc cả gói)
                     Expanded(
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.green,
                         ),
                         onPressed: () async {
-                          // 1. Cập nhật trạng thái booking
-                          await booking.updateStatus(
-                            bookingId: b.id,
-                            status: BookingStatus.accepted,
-                          );
+                          // 1. Update trạng thái
+                          if (isPackage &&
+                              first.packageId != null &&
+                              first.packageId!.isNotEmpty) {
+                            await booking.updateBookingStatusGroup(
+                              first.packageId!,
+                              BookingStatus.accepted,
+                            );
+                          } else {
+                            await booking.updateBookingStatus(
+                              first.id,
+                              BookingStatus.accepted,
+                            );
+                          }
 
-                          // 2. Tạo thông báo cho học viên
-                          final notif = context
-                              .read<NotificationProvider>();
+                          // Ẩn group khỏi UI ngay
+                          setState(() {
+                            _hiddenGroupIds.add(groupId);
+                          });
+
+                          // 2. Gửi thông báo cho học viên
+                          final notif =
+                          context.read<NotificationProvider>();
                           final tutorName =
                               user.displayName ?? 'Gia sư';
 
-                          await notif
-                              .createBookingAcceptedNotification(
-                            studentId: b.studentId,
+                          await notif.createBookingAcceptedNotification(
+                            studentId: first.studentId,
                             tutorName: tutorName,
-                            bookingId: b.id,
-                            subject: b.subject,
-                            startAt: b.startAt,
+                            subject: first.subject,
+                            startAt: first.startAt,
+                            bookingId: isPackage ? null : first.id,
+                            packageId:
+                            isPackage ? first.packageId : null,
+                            isPackage: isPackage,
+                            totalSessions:
+                            isPackage ? sessions.length : null,
                           );
 
                           if (context.mounted) {
-                            ScaffoldMessenger.of(context)
-                                .showSnackBar(
-                              const SnackBar(
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
                                 content: Text(
-                                  'Đã chấp nhận yêu cầu đặt lịch.',
+                                  isPackage
+                                      ? 'Đã chấp nhận yêu cầu gói học.'
+                                      : 'Đã chấp nhận yêu cầu đặt lịch.',
                                 ),
                               ),
                             );

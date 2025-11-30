@@ -1,7 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+
 import 'package:tutor_app/config/theme.dart';
+import 'package:tutor_app/data/models/booking_model.dart';
+import 'package:tutor_app/presentation/provider/booking_provider.dart';
+import 'package:tutor_app/presentation/provider/notification_provider.dart';
 
 String _fmtVnd(num v) =>
     NumberFormat.currency(locale: 'vi_VN', symbol: '₫', decimalDigits: 0)
@@ -15,16 +20,93 @@ class TutorUpcomingLessonsScreen extends StatelessWidget {
 
   final String tutorId;
 
+  // ----- BẤM HOÀN THÀNH -----
+  Future<void> _markCompleted(
+      BuildContext context,
+      BookingModel booking,
+      ) async {
+    final bookingProvider = context.read<BookingProvider>();
+    final notif = context.read<NotificationProvider>();
+
+    await bookingProvider.tutorCompleteBooking(booking);
+
+    // Gửi thông báo cho học viên
+    await notif.createLessonCompletedNotification(booking: booking);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Đã đánh dấu buổi học hoàn thành')),
+    );
+  }
+
+  // ----- BẤM HỦY BUỔI -----
+  Future<void> _cancelLesson(
+      BuildContext context,
+      BookingModel booking,
+      ) async {
+    final reasonCtrl = TextEditingController();
+    final primary = AppTheme.primaryColor;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Huỷ buổi học'),
+        content: TextField(
+          controller: reasonCtrl,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            labelText: 'Lý do huỷ (tuỳ chọn)',
+            alignLabelWithHint: true,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Không'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primary,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Xác nhận huỷ'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final bookingProvider = context.read<BookingProvider>();
+    final notif = context.read<NotificationProvider>();
+    final reason = reasonCtrl.text.trim();
+
+    await bookingProvider.tutorCancelBooking(
+      booking,
+      reason: reason.isEmpty ? null : reason,
+    );
+
+    // Gửi thông báo huỷ cho học viên
+    await notif.createLessonCancelledNotification(
+      booking: booking,
+      reason: reason.isEmpty ? null : reason,
+    );
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Buổi học đã được huỷ')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final primary = AppTheme.primaryColor;
     final dfDate = DateFormat('dd/MM/yyyy');
     final dfTime = DateFormat('HH:mm');
 
+    // lấy TẤT CẢ buổi accepted của tutor (quá khứ + tương lai)
     final stream = FirebaseFirestore.instance
         .collection('bookings')
         .where('tutorId', isEqualTo: tutorId)
-        .where('status', isEqualTo: 'accepted')
+        .where('status', isEqualTo: BookingStatus.accepted)
         .orderBy('startAt')
         .snapshots();
 
@@ -51,49 +133,40 @@ class TutorUpcomingLessonsScreen extends StatelessWidget {
           }
 
           final docs = snapshot.data?.docs ?? [];
-          final now = DateTime.now();
-
-          // chỉ lấy buổi ở tương lai
-          final upcomingDocs = docs.where((doc) {
-            final start =
-            (doc.data()['startAt'] as Timestamp).toDate();
-            return !start.isBefore(now);
-          }).toList();
-
-          if (upcomingDocs.isEmpty) {
+          if (docs.isEmpty) {
             return Center(
               child: Text(
-                'Hiện chưa có buổi học nào sắp tới.',
+                'Hiện chưa có buổi học nào.',
                 style: TextStyle(color: Colors.grey[700]),
               ),
             );
           }
 
+          final now = DateTime.now();
+          final bookings = docs
+              .map((d) => BookingModel.fromDoc(d))
+              .toList()
+            ..sort((a, b) => a.startAt.compareTo(b.startAt));
+
           return ListView.builder(
             padding: const EdgeInsets.all(16),
-            itemCount: upcomingDocs.length,
+            itemCount: bookings.length,
             itemBuilder: (context, index) {
-              final doc = upcomingDocs[index];
-              final data = doc.data();
-              final start =
-              (data['startAt'] as Timestamp).toDate();
-              final end =
-              (data['endAt'] as Timestamp).toDate();
-              final subject =
-              (data['subject'] ?? '').toString();
-              final studentName =
-              (data['studentName'] ?? 'Học viên').toString();
+              final booking = bookings[index];
 
-              final rawTotal =
-                  data['totalPrice'] ?? data['price'] ?? 0;
-              double total;
-              if (rawTotal is int) {
-                total = rawTotal.toDouble();
-              } else if (rawTotal is num) {
-                total = rawTotal.toDouble();
-              } else {
-                total = 0;
-              }
+              final start = booking.startAt;
+              final end = booking.endAt;
+              final subject = booking.subject;
+              final studentName = booking.studentName;
+              final total = booking.price;
+
+              final hasStarted = start.isBefore(now);
+              final hasEnded = end.isBefore(now);
+
+              // chưa bắt đầu -> được phép hủy
+              final canCancel = !hasStarted;
+              // đã kết thúc -> được phép hoàn thành
+              final canMarkCompleted = hasEnded;
 
               return Container(
                 margin: const EdgeInsets.only(bottom: 10),
@@ -110,16 +183,14 @@ class TutorUpcomingLessonsScreen extends StatelessWidget {
                   ],
                 ),
                 child: Column(
-                  crossAxisAlignment:
-                  CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Môn + ngày
                     Row(
                       children: [
                         Expanded(
                           child: Text(
-                            subject.isEmpty
-                                ? 'Môn học'
-                                : subject,
+                            subject.isEmpty ? 'Môn học' : subject,
                             style: const TextStyle(
                               fontWeight: FontWeight.w700,
                               fontSize: 14,
@@ -136,6 +207,7 @@ class TutorUpcomingLessonsScreen extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
+                    // Tên học viên
                     Row(
                       children: [
                         const Icon(
@@ -155,6 +227,7 @@ class TutorUpcomingLessonsScreen extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
+                    // Thời gian + tiền
                     Row(
                       children: [
                         const Icon(
@@ -176,6 +249,39 @@ class TutorUpcomingLessonsScreen extends StatelessWidget {
                             color: Colors.green,
                           ),
                         ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    // ===== Nút hành động =====
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        if (canCancel)
+                          TextButton.icon(
+                            onPressed: () =>
+                                _cancelLesson(context, booking),
+                            icon: const Icon(
+                              Icons.cancel_outlined,
+                              size: 18,
+                              color: Colors.red,
+                            ),
+                            label: const Text(
+                              'Huỷ buổi học',
+                              style: TextStyle(color: Colors.red),
+                            ),
+                          ),
+                        if (canMarkCompleted)
+                          TextButton.icon(
+                            onPressed: () =>
+                                _markCompleted(context, booking),
+                            icon: const Icon(
+                              Icons.check_circle_outline,
+                              size: 18,
+                            ),
+                            label: const Text('Đánh dấu đã dạy xong'),
+                          ),
                       ],
                     ),
                   ],

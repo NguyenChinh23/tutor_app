@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'firebase_options.dart';
 import 'config/app_router.dart';
@@ -13,9 +14,7 @@ import 'package:tutor_app/presentation/provider/tutor_provider.dart';
 import 'package:tutor_app/presentation/provider/booking_provider.dart';
 import 'package:tutor_app/presentation/provider/notification_provider.dart';
 
-import 'package:tutor_app/data/services/booking_service.dart';
 import 'package:tutor_app/data/repositories/booking_repository.dart';
-
 import 'package:tutor_app/data/services/notification_service.dart';
 import 'package:tutor_app/data/repositories/notification_repository.dart';
 
@@ -47,11 +46,14 @@ class TutorApp extends StatelessWidget {
         ChangeNotifierProvider(
           create: (_) => TutorProvider(),
         ),
+
+        /// 🔹 BookingProvider KHÔNG dùng BookingService nữa
         ChangeNotifierProvider(
           create: (_) => BookingProvider(
-            repository: BookingRepository(BookingService()),
+            repository: BookingRepository(),
           ),
         ),
+
         ChangeNotifierProvider(
           create: (_) => NotificationProvider(
             repository: NotificationRepository(
@@ -67,6 +69,17 @@ class TutorApp extends StatelessWidget {
         onGenerateRoute: AppRouter.generateRoute,
         initialRoute: AppRouter.splash,
         theme: AppTheme.lightTheme,
+
+        // 🔥 THÊM PHẦN NÀY ĐỂ FIX showDatePicker / showTimePicker
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [
+          Locale('vi', 'VN'),
+          Locale('en', 'US'),
+        ],
       ),
     );
   }
