@@ -130,7 +130,6 @@ class AppAuthProvider extends ChangeNotifier {
       _user = user;
       notifyListeners();
 
-      //  Đăng xuất ngay để tránh auto-login
       await _repo.logout();
       _user = null;
 
@@ -151,13 +150,11 @@ class AppAuthProvider extends ChangeNotifier {
     }
   }
 
-  // 🔹 Đăng xuất – ưu tiên UI nhanh
+  // 🔹 Đăng xuất
   Future<void> logout() async {
-    // 1. Xoá user cục bộ trước → UI chuyển màn hình ngay
     _user = null;
     notifyListeners();
 
-    // 2. Gọi Firebase signOut phía sau
     try {
       await _repo.logout();
     } catch (e) {
@@ -175,7 +172,7 @@ class AppAuthProvider extends ChangeNotifier {
     }
   }
 
-  // 🔹 Cập nhật hồ sơ (student + tutor)
+  // 🔹 Cập nhật hồ sơ (student + tutor) — có availabilityNote
   Future<void> updateProfile(
       String name,
       String goal, {
@@ -186,6 +183,7 @@ class AppAuthProvider extends ChangeNotifier {
         String? bio,
         double? price,
         String? experience,
+        String? availabilityNote, // 🆕
       }) async {
     if (_user == null) return;
     try {
@@ -198,13 +196,18 @@ class AppAuthProvider extends ChangeNotifier {
         bio: bio,
         price: price,
         experience: experience,
+        availabilityNote: availabilityNote, // 🆕
       );
 
-      // UserModel hiện chỉ lưu name/avatar/goal
       _user = _user!.copyWith(
         displayName: name,
         goal: goal,
         avatarUrl: avatarUrl ?? _user!.avatarUrl,
+        subject: subject ?? _user!.subject,
+        bio: bio ?? _user!.bio,
+        price: price ?? _user!.price,
+        experience: experience ?? _user!.experience,
+        availabilityNote: availabilityNote ?? _user!.availabilityNote,
       );
 
       notifyListeners();

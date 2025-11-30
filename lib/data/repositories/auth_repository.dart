@@ -28,7 +28,6 @@ class AuthRepository {
     );
 
     await _users.doc(user.uid).set(newUser.toMap(), SetOptions(merge: true));
-    debugPrint(" Đăng ký thành công và lưu user vào Firestore");
     return newUser;
   }
 
@@ -51,18 +50,20 @@ class AuthRepository {
     await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
   }
 
-  // 🔹 Đăng xuất
   Future<void> logout() => _auth.signOut();
 
-  // 🔹 Stream user Firestore realtime
+  // 🔹 Stream user realtime từ Firestore
   Stream<UserModel?> userDocStream(String uid) {
     return _users.doc(uid).snapshots().map((snap) {
       if (!snap.exists) return null;
-      return UserModel.fromMap(snap.data()!);
+      return UserModel.fromDoc(snap); // ✅ SỬA Ở ĐÂY
     });
   }
 
-  // 🔹 APPLY TRỞ THÀNH GIA SƯ
+  // ===============================
+  //  APPLY → APPROVE / REJECT TUTOR
+  // ===============================
+
   Future<void> applyTutor({
     required String uid,
     required String email,
@@ -89,7 +90,6 @@ class AuthRepository {
       'avatarUrl': avatarUrl ?? '',
       'status': 'pending',
       'submittedAt': FieldValue.serverTimestamp(),
-      'reviewedBy': null,
     });
 
     await _users.doc(uid).set(
@@ -99,11 +99,8 @@ class AuthRepository {
       },
       SetOptions(merge: true),
     );
-
-    debugPrint(" Hồ sơ gia sư của $email đã gửi lên Firestore (pending)");
   }
 
-  // 🔹 ADMIN DUYỆT GIA SƯ
   Future<void> approveTutor({
     required String uid,
     required String appId,
@@ -113,37 +110,32 @@ class AuthRepository {
     final userRef = _users.doc(uid);
 
     final appSnap = await appRef.get();
-    if (!appSnap.exists) throw Exception(" Hồ sơ ứng tuyển không tồn tại");
+    if (!appSnap.exists) throw Exception("Tutor application does not exist");
+
     final appData = appSnap.data()!;
 
     final batch = _fs.batch();
 
-    // Cập nhật hồ sơ ứng tuyển
     batch.update(appRef, {
       'status': 'approved',
       'reviewedBy': reviewerUid,
       'reviewedAt': FieldValue.serverTimestamp(),
     });
 
-    // Đồng bộ dữ liệu sang users
     batch.update(userRef, {
       'role': 'tutor',
       'isTutorVerified': true,
-      'displayName': appData['fullName'] ?? '',
-      'subject': appData['subject'] ?? '',
+      'displayName': appData['fullName'],
+      'subject': appData['subject'],
       'price': (appData['price'] ?? 0).toDouble(),
-      'experience': appData['experience'] ?? '',
-      'bio': appData['description'] ?? '',
-      'certificateUrl': appData['certificateUrl'] ?? '',
-      'avatarUrl': appData['avatarUrl'] ?? '',
-      'rating': (appData['rating'] ?? 0.0).toDouble(),
+      'experience': appData['experience'],
+      'bio': appData['description'],
+      'avatarUrl': appData['avatarUrl'],
     });
 
     await batch.commit();
-    debugPrint(" Hồ sơ tutor của $uid đã được duyệt & đồng bộ sang users");
   }
 
-  // 🔹 ADMIN TỪ CHỐI HỒ SƠ
   Future<void> rejectTutor({
     required String appId,
     required String reviewerUid,
@@ -153,13 +145,15 @@ class AuthRepository {
       'reviewedBy': reviewerUid,
       'reviewedAt': FieldValue.serverTimestamp(),
     });
-    debugPrint("🚫 Hồ sơ $appId đã bị từ chối");
   }
 
-  //  FETCH HOẶC TẠO USER (khi login lần đầu)
+  // ====================================================
+  //  TẠO HOẶC LẤY USER (login lần đầu)
+  // ====================================================
+
   Future<UserModel?> _fetchOrCreateStudent(User user) async {
     final doc = await _users.doc(user.uid).get();
-    if (doc.exists) return UserModel.fromMap(doc.data()!);
+    if (doc.exists) return UserModel.fromDoc(doc); // ✅ sửa
 
     final newUser = UserModel(
       uid: user.uid,
@@ -174,18 +168,17 @@ class AuthRepository {
     return newUser;
   }
 
-  // 🔹 CẬP NHẬT HỒ SƠ NGƯỜI DÙNG (student + tutor)
+  // 🔹 Cập nhật hồ sơ người dùng
   Future<void> updateUserProfile(
       String uid,
       String name,
       String goal, {
         String? avatarUrl,
-
-        // field dành cho tutor (có thể null với student)
         String? subject,
         String? bio,
         double? price,
         String? experience,
+        String? availabilityNote,
       }) async {
     final data = <String, dynamic>{
       'displayName': name,
@@ -197,13 +190,9 @@ class AuthRepository {
     if (bio != null) data['bio'] = bio;
     if (price != null) data['price'] = price;
     if (experience != null) data['experience'] = experience;
+    if (availabilityNote != null) data['availabilityNote'] = availabilityNote;
 
-    await _users.doc(uid).set(
-      data,
-      SetOptions(merge: true),
-    );
-
-    debugPrint(" Hồ sơ người dùng $uid đã được cập nhật");
+    await _users.doc(uid).set(data, SetOptions(merge: true));
   }
 
   Stream<User?> get authChanges => _auth.authChanges;

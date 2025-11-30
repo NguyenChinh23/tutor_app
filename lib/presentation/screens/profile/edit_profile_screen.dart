@@ -24,6 +24,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late TextEditingController priceController;
   late TextEditingController experienceController;
   late TextEditingController bioController;
+  late TextEditingController availabilityController; // 🆕 lịch rảnh
 
   File? _avatarFile;
   bool _saving = false;
@@ -41,6 +42,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     priceController = TextEditingController();
     experienceController = TextEditingController();
     bioController = TextEditingController();
+    availabilityController = TextEditingController(); // 🆕
 
     if (user != null && user.role == 'tutor') {
       _loadTutorExtra(user.uid);
@@ -57,6 +59,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         subjectController.text = (data['subject'] ?? '').toString();
         bioController.text = (data['bio'] ?? '').toString();
         experienceController.text = (data['experience'] ?? '').toString();
+        availabilityController.text =
+            (data['availabilityNote'] ?? '').toString(); // 🆕
 
         final p = data['price'];
         if (p != null) {
@@ -84,10 +88,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     priceController.dispose();
     experienceController.dispose();
     bioController.dispose();
+    availabilityController.dispose();
     super.dispose();
   }
 
-  /// Chọn ảnh từ gallery
   Future<void> _pickImage() async {
     try {
       final picker = ImagePicker();
@@ -117,7 +121,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
-  /// Lưu dữ liệu
   Future<void> _save() async {
     final auth = context.read<AppAuthProvider>();
     final user = auth.user;
@@ -129,16 +132,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     try {
       String? avatarValue = user.avatarUrl;
 
-      // Nếu có chọn ảnh mới → convert sang base64
       if (_avatarFile != null) {
         final bytes = await _avatarFile!.readAsBytes();
         avatarValue = base64Encode(bytes);
-        debugPrint('Avatar encoded length = ${avatarValue.length}');
       }
 
       // goal:
       // - Student: lấy từ TextField
-      // - Tutor: giữ nguyên goal cũ (không cho sửa)
+      // - Tutor: giữ nguyên goal cũ
       final String finalGoal =
       isTutor ? (user.goal ?? '') : goalController.text.trim();
 
@@ -146,11 +147,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       String? bio;
       double? price;
       String? experience;
+      String? availabilityNote;
 
       if (isTutor) {
         subject = subjectController.text.trim();
         bio = bioController.text.trim();
         experience = experienceController.text.trim();
+        availabilityNote = availabilityController.text.trim(); // 🆕
 
         final raw = priceController.text
             .trim()
@@ -168,6 +171,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         bio: bio,
         price: price,
         experience: experience,
+        availabilityNote: availabilityNote, // 🆕
       );
 
       if (!mounted) return;
@@ -195,10 +199,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     try {
       if (url.startsWith('http')) {
-        // Ảnh dạng URL (tutor apply ban đầu)
         return NetworkImage(url);
       } else {
-        // Ảnh lưu dạng base64 trong Firestore
         final bytes = base64Decode(url);
         return MemoryImage(bytes);
       }
@@ -300,6 +302,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   maxLines: 4,
                   decoration: const InputDecoration(
                     labelText: "Giới thiệu bản thân (bio)",
+                    alignLabelWithHint: true,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: availabilityController,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: "Lịch rảnh (ví dụ: T2–T6 19:00–21:00)",
+                    hintText: "Ví dụ: T2–T6: 19h–21h, CN cả ngày...",
                     alignLabelWithHint: true,
                   ),
                 ),
