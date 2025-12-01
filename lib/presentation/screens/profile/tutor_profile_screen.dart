@@ -18,7 +18,6 @@ class TutorProfileScreen extends StatelessWidget {
       if (avatarUrl.startsWith('http')) {
         return NetworkImage(avatarUrl);
       } else {
-        // base64
         final bytes = base64Decode(avatarUrl);
         return MemoryImage(bytes);
       }
@@ -42,7 +41,7 @@ class TutorProfileScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
-        title: const Text("Tutor Profile"),
+        title: const Text("My Profile"),   // ⭐ ĐÃ ĐỔI TÊN
         centerTitle: true,
         backgroundColor: AppTheme.primaryColor,
         automaticallyImplyLeading: false,
@@ -52,11 +51,15 @@ class TutorProfileScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
+            // Avatar
             CircleAvatar(
               radius: 52,
               backgroundImage: _buildAvatar(user.avatarUrl),
             ),
+
             const SizedBox(height: 16),
+
+            // Name
             Text(
               user.displayName ?? "Tutor",
               style: const TextStyle(
@@ -64,7 +67,10 @@ class TutorProfileScreen extends StatelessWidget {
                 fontWeight: FontWeight.bold,
               ),
             ),
+
             const SizedBox(height: 6),
+
+            // Email
             Text(
               user.email,
               style: const TextStyle(
@@ -73,9 +79,10 @@ class TutorProfileScreen extends StatelessWidget {
                 fontWeight: FontWeight.w400,
               ),
             ),
+
             const SizedBox(height: 12),
 
-            // Chip trạng thái tutor
+            // Check verified
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
               decoration: BoxDecoration(
@@ -89,15 +96,15 @@ class TutorProfileScreen extends StatelessWidget {
                     ? "✅ Verified Tutor"
                     : "⏳ Tutor pending approval",
                 style: TextStyle(
-                  color: user.isTutorVerified
-                      ? Colors.green
-                      : Colors.orange[800],
+                  color:
+                  user.isTutorVerified ? Colors.green : Colors.orange[800],
                   fontWeight: FontWeight.w500,
                   fontSize: 14,
                 ),
               ),
             ),
 
+            // Goal (nếu có)
             if (user.goal != null && user.goal!.isNotEmpty) ...[
               const SizedBox(height: 8),
               Container(
@@ -120,7 +127,7 @@ class TutorProfileScreen extends StatelessWidget {
 
             const SizedBox(height: 32),
 
-            // 🔹 Edit Profile
+            // ===== EDIT PROFILE =====
             _profileTile(
               icon: Icons.edit,
               color: Colors.blueAccent,
@@ -131,26 +138,16 @@ class TutorProfileScreen extends StatelessWidget {
               ),
             ),
 
-            // Placeholder cho phần cài đặt Tutor
-            _profileTile(
-              icon: Icons.settings_outlined,
-              color: Colors.deepPurple,
-              title: "Tutor settings (coming soon)",
-              onTap: () {},
-            ),
-
             const SizedBox(height: 16),
 
-            // 🚪 Logout – KHÔNG await để nhanh
+            // ===== LOGOUT =====
             _profileTile(
               icon: Icons.logout,
               color: Colors.redAccent,
               title: "Logout",
               textColor: Colors.redAccent,
               onTap: () {
-                // không await để UI chuyển ngay
                 context.read<AppAuthProvider>().logout();
-
                 Navigator.pushNamedAndRemoveUntil(
                   context,
                   AppRouter.login,
@@ -196,11 +193,8 @@ class TutorProfileScreen extends StatelessWidget {
             fontWeight: FontWeight.w500,
           ),
         ),
-        trailing: const Icon(
-          Icons.arrow_forward_ios,
-          size: 16,
-          color: Colors.grey,
-        ),
+        trailing: const Icon(Icons.arrow_forward_ios,
+            size: 16, color: Colors.grey),
         onTap: onTap,
       ),
     );
