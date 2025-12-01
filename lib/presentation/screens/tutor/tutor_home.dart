@@ -1,15 +1,17 @@
+// lib/presentation/screens/tutor/tutor_home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import 'package:tutor_app/config/theme.dart';
 import 'package:tutor_app/presentation/provider/auth_provider.dart';
 
-// Tab 0: Dashboard (UI phức tạp xử lý file khác)
+// Tab 0: Dashboard
 import 'package:tutor_app/presentation/screens/tutor/tutor_dashboard_screen.dart';
 
-// Tab 1: Chat
-import 'package:tutor_app/presentation/screens/chat/chat_list_screen.dart';
+// Tab 1: Lịch dạy của tôi
+import 'package:tutor_app/presentation/screens/tutor/tutor_upcoming_lessons_screen.dart';
 
-// Tab 2: Tutor Profile (mới)
+// Tab 2: Tutor Profile
 import 'package:tutor_app/presentation/screens/profile/tutor_profile_screen.dart';
 
 class TutorHomeScreen extends StatefulWidget {
@@ -20,6 +22,7 @@ class TutorHomeScreen extends StatefulWidget {
 }
 
 class _TutorHomeScreenState extends State<TutorHomeScreen> {
+  // 0: Dashboard, 1: Schedule, 2: Profile
   int _selectedIndex = 0;
 
   @override
@@ -42,10 +45,11 @@ class _TutorHomeScreenState extends State<TutorHomeScreen> {
       );
     }
 
+    // 👇 3 màn tương ứng 3 tab
     final List<Widget> screens = [
-      const TutorDashboardScreen(),
-      const ChatListScreen(),
-      const TutorProfileScreen(),
+      const TutorDashboardScreen(),                    // Home
+      TutorUpcomingLessonsScreen(tutorId: user.uid),   // Schedule
+      const TutorProfileScreen(),                      // Profile
     ];
 
     return Scaffold(
@@ -61,8 +65,8 @@ class _TutorHomeScreenState extends State<TutorHomeScreen> {
             label: 'Home',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.chat_outlined),
-            label: 'Chat',
+            icon: Icon(Icons.calendar_month_outlined),
+            label: 'Schedule', // hoặc 'Lịch dạy'
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),

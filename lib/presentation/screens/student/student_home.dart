@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -10,12 +11,12 @@ import 'package:tutor_app/presentation/provider/tutor_provider.dart';
 import 'package:tutor_app/presentation/provider/notification_provider.dart';
 
 import 'package:tutor_app/presentation/screens/common/widgets/tutor_card.dart';
-import 'package:tutor_app/presentation/screens/chat/chat_list_screen.dart';
 import 'package:tutor_app/presentation/screens/profile/student_profile_screen.dart';
 import 'package:tutor_app/presentation/screens/student/tutor_search_screen.dart';
 import 'package:tutor_app/presentation/screens/student/filter_bottom_sheet.dart';
 import 'package:tutor_app/presentation/screens/student/tutor_detail_screen.dart';
 import 'package:tutor_app/presentation/screens/student/notification_screen.dart';
+import 'package:tutor_app/presentation/screens/student/student_my_lessons_screen.dart';
 
 String fmtVnd(num v) => NumberFormat.currency(
   locale: 'vi_VN',
@@ -31,9 +32,10 @@ class StudentHomeScreen extends StatefulWidget {
 }
 
 class _StudentHomeScreenState extends State<StudentHomeScreen> {
+  /// 0: Home, 1: My Lessons, 2: Profile
   int _selectedIndex = 0;
-  List<String> selectedSubjects = [];
 
+  List<String> selectedSubjects = [];
   double? minPrice;
   double? maxPrice;
   double minRating = 0;
@@ -51,7 +53,6 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // 🔔 Bắt đầu listen notifications sau khi có user
     if (!_notifInitialized) {
       final auth = context.watch<AppAuthProvider>();
       final user = auth.user;
@@ -87,10 +88,11 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
     final tutorProvider = context.watch<TutorProvider>();
     final user = auth.user;
 
+    // 3 màn tương ứng 3 item bottom
     final List<Widget> screens = [
-      _buildHome(context, user, tutorProvider),
-      const ChatListScreen(),
-      const StudentProfileScreen(),
+      _buildHome(context, user, tutorProvider), // index 0
+      const StudentMyLessonsScreen(),           // index 1
+      const StudentProfileScreen(),            // index 2
     ];
 
     return Scaffold(
@@ -106,8 +108,8 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
             label: 'Home',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.chat_outlined),
-            label: 'Chat',
+            icon: Icon(Icons.calendar_month_outlined),
+            label: 'My Lessons',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),
@@ -119,21 +121,20 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
   }
 
   Widget _buildHome(
-    BuildContext context,
-    dynamic user,
-    TutorProvider tutorProvider,
-  ) {
+      BuildContext context,
+      dynamic user,
+      TutorProvider tutorProvider,
+      ) {
     final notif = context.watch<NotificationProvider>();
 
     final tutors = tutorProvider.tutors.where((tutor) {
-      final subjectMatch =
-          selectedSubjects.isEmpty ||
+      final subjectMatch = selectedSubjects.isEmpty ||
           selectedSubjects.any(
-            (sub) => tutor.subject.toLowerCase().contains(sub.toLowerCase()),
+                (sub) =>
+                tutor.subject.toLowerCase().contains(sub.toLowerCase()),
           );
 
-      final priceMatch =
-          (minPrice == null || tutor.price >= minPrice!) &&
+      final priceMatch = (minPrice == null || tutor.price >= minPrice!) &&
           (maxPrice == null || tutor.price <= maxPrice!);
 
       final ratingMatch = tutor.rating >= minRating;
@@ -162,7 +163,8 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
           ),
           child: SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 children: [
                   CircleAvatar(
@@ -178,7 +180,8 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                       children: [
                         const Text(
                           "Welcome,",
-                          style: TextStyle(color: Colors.white70, fontSize: 14),
+                          style: TextStyle(
+                              color: Colors.white70, fontSize: 14),
                         ),
                         Text(
                           user?.displayName ?? "Student 👋",
@@ -211,8 +214,6 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                           color: Colors.white,
                           size: 26,
                         ),
-
-                        // 🔴 Badge số thông báo
                         if (notif.unreadCount > 0)
                           Positioned(
                             right: -2,
@@ -223,10 +224,9 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                                 color: Colors.red,
                                 shape: BoxShape.circle,
                               ),
-
                               child: Text(
                                 notif.unreadCount > 99
-                                    ? '99+' // 👈 nếu hơn 99 thì hiển thị 99+
+                                    ? '99+'
                                     : notif.unreadCount.toString(),
                                 style: const TextStyle(
                                   color: Colors.white,
@@ -248,96 +248,100 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
       body: tutorProvider.isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
-              onRefresh: () async => context.read<TutorProvider>().refresh(),
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        onRefresh: () async =>
+            context.read<TutorProvider>().refresh(),
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _searchAndFilterBar(context),
+              const SizedBox(height: 24),
+              const Text(
+                "Popular Subjects",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 45,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
                   children: [
-                    _searchAndFilterBar(context),
-                    const SizedBox(height: 24),
-                    const Text(
-                      "Popular Subjects",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      height: 45,
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        children: [
-                          _subjectChip("All", Icons.all_inclusive),
-                          _subjectChip("Math", Icons.calculate),
-                          _subjectChip("English", Icons.language),
-                          _subjectChip("Physics", Icons.science),
-                          _subjectChip("Chemistry", Icons.biotech),
-                          _subjectChip("IELTS", Icons.school),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 25),
-                    const Text(
-                      "Top Tutors",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    if (tutors.isEmpty)
-                      const Center(
-                        child: Padding(
-                          padding: EdgeInsets.only(top: 50),
-                          child: Text("No tutors found with these filters."),
-                        ),
-                      )
-                    else
-                      Column(
-                        children: tutors
-                            .map(
-                              (tutor) => AnimatedOpacity(
-                                duration: const Duration(milliseconds: 400),
-                                opacity: 1,
-                                child: InkWell(
-                                  onTap: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => TutorDetailScreen(
-                                          tutor: tutor,
-                                          autoOpenBook: false,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                  child: TutorCard(
-                                    tutor: tutor,
-                                    onBook: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => TutorDetailScreen(
-                                            tutor: tutor,
-                                            autoOpenBook: true,
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ),
-                            )
-                            .toList(),
-                      ),
-                    const SizedBox(height: 40),
+                    _subjectChip("All", Icons.all_inclusive),
+                    _subjectChip("Math", Icons.calculate),
+                    _subjectChip("English", Icons.language),
+                    _subjectChip("Physics", Icons.science),
+                    _subjectChip("Chemistry", Icons.biotech),
+                    _subjectChip("IELTS", Icons.school),
                   ],
                 ),
               ),
-            ),
+              const SizedBox(height: 25),
+              const Text(
+                "Top Tutors",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (tutors.isEmpty)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.only(top: 50),
+                    child: Text(
+                        "No tutors found with these filters."),
+                  ),
+                )
+              else
+                Column(
+                  children: tutors
+                      .map(
+                        (tutor) => AnimatedOpacity(
+                      duration:
+                      const Duration(milliseconds: 400),
+                      opacity: 1,
+                      child: InkWell(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => TutorDetailScreen(
+                                tutor: tutor,
+                                autoOpenBook: false,
+                              ),
+                            ),
+                          );
+                        },
+                        child: TutorCard(
+                          tutor: tutor,
+                          onBook: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    TutorDetailScreen(
+                                      tutor: tutor,
+                                      autoOpenBook: true,
+                                    ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  )
+                      .toList(),
+                ),
+              const SizedBox(height: 40),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -345,7 +349,9 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
     final tutors = context.read<TutorProvider>().tutors;
     final double priceMaxLimit = tutors.isEmpty
         ? 1_000_000
-        : tutors.map((t) => (t.price as num).toDouble()).reduce(math.max);
+        : tutors
+        .map((t) => (t.price as num).toDouble())
+        .reduce(math.max);
 
     final result = await showFilterBottomSheet(
       context,
@@ -361,8 +367,10 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
     setState(() {
       selectedSubjects = List<String>.from(result["subjects"] ?? []);
       minPrice = (result["minPrice"] as num?)?.toDouble() ?? 0;
-      maxPrice = (result["maxPrice"] as num?)?.toDouble() ?? priceMaxLimit;
-      minRating = (result["minRating"] as num?)?.toDouble() ?? 0;
+      maxPrice =
+          (result["maxPrice"] as num?)?.toDouble() ?? priceMaxLimit;
+      minRating =
+          (result["minRating"] as num?)?.toDouble() ?? 0;
     });
   }
 
@@ -375,18 +383,21 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const TutorSearchScreen()),
+                MaterialPageRoute(
+                    builder: (_) => const TutorSearchScreen()),
               );
             },
             child: Container(
               height: 48,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 14),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(14),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black12.withOpacity(0.08),
+                    color:
+                    Colors.black12.withOpacity(0.08),
                     blurRadius: 6,
                     offset: const Offset(0, 2),
                   ),
@@ -416,17 +427,20 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
             height: 46,
             width: 46,
             decoration: BoxDecoration(
-              color: AppTheme.primaryColor.withOpacity(0.10),
+              color:
+              AppTheme.primaryColor.withOpacity(0.10),
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black12.withOpacity(0.06),
+                  color:
+                  Colors.black12.withOpacity(0.06),
                   blurRadius: 6,
-                  offset: Offset(0, 2),
+                  offset: const Offset(0, 2),
                 ),
               ],
             ),
-            child: Icon(Icons.tune, color: AppTheme.primaryColor),
+            child: Icon(Icons.tune,
+                color: AppTheme.primaryColor),
           ),
         ),
       ],
@@ -434,8 +448,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
   }
 
   Widget _subjectChip(String title, IconData icon) {
-    final isSelected =
-        selectedSubjects.contains(title) ||
+    final isSelected = selectedSubjects.contains(title) ||
         (title == "All" && selectedSubjects.isEmpty);
     return GestureDetector(
       onTap: () {
@@ -455,12 +468,18 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         margin: const EdgeInsets.only(right: 10),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding:
+        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.primaryColor : Colors.white,
+          color: isSelected
+              ? AppTheme.primaryColor
+              : Colors.white,
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
-            BoxShadow(color: Colors.black12.withOpacity(0.05), blurRadius: 3),
+            BoxShadow(
+              color: Colors.black12.withOpacity(0.05),
+              blurRadius: 3,
+            ),
           ],
         ),
         child: Row(
@@ -468,13 +487,17 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
             Icon(
               icon,
               size: 18,
-              color: isSelected ? Colors.white : AppTheme.primaryColor,
+              color: isSelected
+                  ? Colors.white
+                  : AppTheme.primaryColor,
             ),
             const SizedBox(width: 6),
             Text(
               title,
               style: TextStyle(
-                color: isSelected ? Colors.white : AppTheme.primaryColor,
+                color: isSelected
+                    ? Colors.white
+                    : AppTheme.primaryColor,
                 fontWeight: FontWeight.w500,
               ),
             ),
