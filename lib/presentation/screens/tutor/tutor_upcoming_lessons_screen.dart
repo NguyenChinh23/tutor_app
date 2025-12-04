@@ -28,6 +28,9 @@ class TutorUpcomingLessonsScreen extends StatelessWidget {
     final bookingProvider = context.read<BookingProvider>();
     final notif = context.read<NotificationProvider>();
 
+    // ⭐ GỌI PROVIDER:
+    //   - update status = completed
+    //   - tăng totalLessons + totalStudents cho gia sư (trong BookingProvider / Repository)
     await bookingProvider.tutorCompleteBooking(booking);
 
     // Gửi thông báo cho học viên
@@ -102,11 +105,11 @@ class TutorUpcomingLessonsScreen extends StatelessWidget {
     final dfDate = DateFormat('dd/MM/yyyy');
     final dfTime = DateFormat('HH:mm');
 
-    // lấy TẤT CẢ buổi accepted của tutor (quá khứ + tương lai)
+    // 🔥 lấy TẤT CẢ buổi status = "accepted" của tutor
     final stream = FirebaseFirestore.instance
         .collection('bookings')
         .where('tutorId', isEqualTo: tutorId)
-        .where('status', isEqualTo: BookingStatus.accepted)
+        .where('status', isEqualTo: 'accepted')
         .orderBy('startAt')
         .snapshots();
 
@@ -163,10 +166,8 @@ class TutorUpcomingLessonsScreen extends StatelessWidget {
               final hasStarted = start.isBefore(now);
               final hasEnded = end.isBefore(now);
 
-              // chưa bắt đầu -> được phép hủy
-              final canCancel = !hasStarted;
-              // đã kết thúc -> được phép hoàn thành
-              final canMarkCompleted = hasEnded;
+              final canCancel = !hasStarted;      // chưa bắt đầu -> huỷ được
+              final canMarkCompleted = hasEnded;  // đã kết thúc -> hoàn thành được
 
               return Container(
                 margin: const EdgeInsets.only(bottom: 10),
@@ -207,6 +208,7 @@ class TutorUpcomingLessonsScreen extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
+
                     // Tên học viên
                     Row(
                       children: [
@@ -227,6 +229,7 @@ class TutorUpcomingLessonsScreen extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
+
                     // Thời gian + tiền
                     Row(
                       children: [

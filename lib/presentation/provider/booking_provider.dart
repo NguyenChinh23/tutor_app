@@ -245,22 +245,38 @@ class BookingProvider extends ChangeNotifier {
 
   // ================== GIA SƯ HOÀN THÀNH/HỦY BUỔI ==================
 
+  // ⭐ GIA SƯ ĐÁNH DẤU HOÀN THÀNH
   Future<void> tutorCompleteBooking(BookingModel booking) async {
-    await updateBookingStatus(booking.id, BookingStatus.completed);
+    // 1. Cập nhật trạng thái booking
+    await repository.updateStatus(
+      bookingId: booking.id,
+      status: BookingStatus.completed,
+    );
+
+    // 2. Tăng thống kê cho gia sư
+    await repository.increaseTutorStats(
+      tutorId: booking.tutorId,
+      studentId: booking.studentId,
+    );
+
+    notifyListeners();
   }
 
+  // GIA SƯ HUỶ BUỔI HỌC
   Future<void> tutorCancelBooking(
       BookingModel booking, {
         String? reason,
       }) async {
-    await updateBookingStatus(
-      booking.id,
-      BookingStatus.cancelled,
+    await repository.updateStatus(
+      bookingId: booking.id,
+      status: BookingStatus.cancelled,
       cancelReason: reason,
     );
+
+    notifyListeners();
   }
 
-  // ================== ĐÁNH GIÁ ==================
+  // ĐÁNH GIÁ
   Future<void> submitRating({
     required BookingModel booking,
     required double rating,

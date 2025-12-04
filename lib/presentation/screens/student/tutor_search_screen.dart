@@ -22,7 +22,7 @@ String _initials(String name) {
   return (p.first[0] + p.last[0]).toUpperCase();
 }
 
-/// Avatar helper: hỗ trợ cả link http và base64
+/// Avatar helper: hỗ trợ link http và base64
 ImageProvider? _buildAvatar(String? avatarUrl) {
   if (avatarUrl == null || avatarUrl.isEmpty) return null;
 
