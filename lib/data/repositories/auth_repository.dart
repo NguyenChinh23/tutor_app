@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
+
 import 'package:tutor_app/data/models/user_model.dart';
 import 'package:tutor_app/data/services/auth_service.dart';
 
@@ -45,9 +45,9 @@ class AuthRepository {
     return _fetchOrCreateStudent(user);
   }
 
-  // 🔹 Reset password
+  // 🔹 Reset password (dùng logic trong AuthService: check method password)
   Future<void> resetPassword(String email) async {
-    await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+    await _auth.resetPassword(email);
   }
 
   Future<void> logout() => _auth.signOut();
@@ -56,7 +56,7 @@ class AuthRepository {
   Stream<UserModel?> userDocStream(String uid) {
     return _users.doc(uid).snapshots().map((snap) {
       if (!snap.exists) return null;
-      return UserModel.fromDoc(snap); // ✅ SỬA Ở ĐÂY
+      return UserModel.fromDoc(snap);
     });
   }
 
@@ -153,7 +153,7 @@ class AuthRepository {
 
   Future<UserModel?> _fetchOrCreateStudent(User user) async {
     final doc = await _users.doc(user.uid).get();
-    if (doc.exists) return UserModel.fromDoc(doc); // ✅ sửa
+    if (doc.exists) return UserModel.fromDoc(doc);
 
     final newUser = UserModel(
       uid: user.uid,
@@ -164,7 +164,7 @@ class AuthRepository {
       isTutorVerified: false,
     );
 
-    await _users.doc(user.uid).set(newUser.toMap());
+    await _users.doc(user.uid).set(newUser.toMap(), SetOptions(merge: true));
     return newUser;
   }
 
@@ -195,6 +195,7 @@ class AuthRepository {
     await _users.doc(uid).set(data, SetOptions(merge: true));
   }
 
+  // 🔹 Auth stream & current user từ FirebaseAuth
   Stream<User?> get authChanges => _auth.authChanges;
   User? get currentUser => _auth.currentUser;
 }

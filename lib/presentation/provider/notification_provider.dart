@@ -18,7 +18,7 @@ class NotificationProvider extends ChangeNotifier {
 
   StreamSubscription? _sub;
 
-  // ===== Lắng nghe notif của user =====
+  // Lắng nghe notif của user
   void listenForUser(String userId) {
     _sub?.cancel();
 
@@ -36,8 +36,7 @@ class NotificationProvider extends ChangeNotifier {
     );
   }
 
-  // ===== 1) THÔNG BÁO KHI GIA SƯ CHẤP NHẬN =====
-  //
+  // tHÔNG BÁO KHI GIA SƯ CHẤP NHẬN
   // Buổi lẻ: isPackage = false (default)
   // Gói: isPackage = true, truyền thêm packageId + totalSessions
   Future<void> createBookingAcceptedNotification({
@@ -76,7 +75,7 @@ class NotificationProvider extends ChangeNotifier {
     await repository.createNotification(notif);
   }
 
-  // ===== 2) THÔNG BÁO KHI BUỔI HỌC BỊ HUỶ =====
+  //  THÔNG BÁO KHI BUỔI HỌC BỊ HUỶ
   Future<void> createLessonCancelledNotification({
     required BookingModel booking,
     String? reason,
@@ -105,7 +104,7 @@ class NotificationProvider extends ChangeNotifier {
     await repository.createNotification(notif);
   }
 
-  // ===== 3) THÔNG BÁO KHI BUỔI HỌC HOÀN THÀNH =====
+  //  THÔNG BÁO KHI BUỔI HỌC HOÀN THÀNH
   Future<void> createLessonCompletedNotification({
     required BookingModel booking,
   }) async {
@@ -130,7 +129,7 @@ class NotificationProvider extends ChangeNotifier {
     await repository.createNotification(notif);
   }
 
-  // ===== Đánh dấu đã đọc =====
+  //  Đánh dấu đã đọc
   Future<void> markAsRead(String id) async {
     try {
       await repository.markAsRead(id);

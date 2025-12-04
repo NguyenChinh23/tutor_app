@@ -1,12 +1,16 @@
+// lib/presentation/provider/auth_provider.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
-import '../../data/models/user_model.dart';
-import '../../data/repositories/auth_repository.dart';
-import '../../data/repositories/config_repository.dart';
+
+import 'package:tutor_app/data/models/user_model.dart';
+import 'package:tutor_app/data/repositories/auth_repository.dart';
 import 'package:tutor_app/config/app_router.dart';
+
+// 🌍 Biến global Navigator
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 class AppAuthProvider extends ChangeNotifier {
   final _repo = AuthRepository();
-  final _config = ConfigRepository();
 
   UserModel? _user;
   UserModel? get user => _user;
@@ -14,44 +18,52 @@ class AppAuthProvider extends ChangeNotifier {
   bool _loading = false;
   bool get isLoading => _loading;
 
-  String? _adminUid;
-  String? get adminUid => _adminUid;
-
   bool _justRegistered = false; // tránh redirect sau khi đăng ký
+
+  StreamSubscription? _authSub;
+  StreamSubscription<UserModel?>? _userSub;
 
   void _setLoading(bool v) {
     _loading = v;
     notifyListeners();
   }
 
-  // 🔹 Lắng nghe trạng thái đăng nhập Firebase
+  // 🔹 Lắng nghe trạng thái đăng nhập Firebase + user Firestore
   void bootstrap() {
-    _repo.authChanges.listen((fbUser) async {
+    // tránh subscribe nhiều lần
+    _authSub?.cancel();
+
+    _authSub = _repo.authChanges.listen((fbUser) {
+      // mỗi lần user auth thay đổi -> hủy stream cũ
+      _userSub?.cancel();
+
       if (fbUser == null) {
         _user = null;
         notifyListeners();
         return;
       }
 
-      try {
-        if (fbUser.uid == "eYngCmflUZQ2p2k9XfvctEvyOWP2") {
-          _adminUid ??= await _config.fetchAdminUid();
+      // 🔹 Lắng nghe thông tin user realtime từ Firestore
+      _userSub = _repo.userDocStream(fbUser.uid).listen((u) {
+        _user = u;
+        notifyListeners();
+
+        if (u != null && !_justRegistered) {
+          _navigateAfterLogin(u);
         }
-
-        // 🔹 Lắng nghe thông tin user realtime
-        _repo.userDocStream(fbUser.uid).listen((u) {
-          _user = u;
-          notifyListeners();
-
-          //  Chỉ điều hướng khi login, không khi register
-          if (u != null && !_justRegistered) {
-            _navigateAfterLogin(u);
-          }
-        });
-      } catch (e) {
-        debugPrint("Bootstrap error: $e");
-      }
+      }, onError: (e) {
+        debugPrint("userDocStream error: $e");
+      });
+    }, onError: (e) {
+      debugPrint("authChanges error: $e");
     });
+  }
+
+  @override
+  void dispose() {
+    _authSub?.cancel();
+    _userSub?.cancel();
+    super.dispose();
   }
 
   // 🔹 Điều hướng theo vai trò
@@ -60,44 +72,62 @@ class AppAuthProvider extends ChangeNotifier {
       final ctx = navigatorKey.currentContext;
       if (ctx == null) return;
 
-      if (u.role == 'admin' || u.uid == "eYngCmflUZQ2p2k9XfvctEvyOWP2") {
-        Navigator.pushReplacementNamed(ctx, AppRouter.admin);
-      } else if (u.role == 'tutor') {
+      final role = u.role.trim().toLowerCase();
+
+      debugPrint(
+        '🔐 NAVIGATE: uid=${u.uid}, email=${u.email}, role=$role, isTutorVerified=${u.isTutorVerified}',
+      );
+
+      if (role == 'admin') {
+        Navigator.pushNamedAndRemoveUntil(
+          ctx,
+          AppRouter.admin,
+              (route) => false,
+        );
+      } else if (role == 'tutor') {
         if (u.isTutorVerified == true) {
-          Navigator.pushReplacementNamed(ctx, AppRouter.tutorHome);
+          Navigator.pushNamedAndRemoveUntil(
+            ctx,
+            AppRouter.tutorHome,
+                (route) => false,
+          );
         } else {
-          Navigator.pushReplacementNamed(ctx, AppRouter.studentHome);
+          Navigator.pushNamedAndRemoveUntil(
+            ctx,
+            AppRouter.studentHome,
+                (route) => false,
+          );
         }
       } else {
-        Navigator.pushReplacementNamed(ctx, AppRouter.studentHome);
+        Navigator.pushNamedAndRemoveUntil(
+          ctx,
+          AppRouter.studentHome,
+              (route) => false,
+        );
       }
     });
   }
 
   // 🔹 Đăng nhập Email & Password
-  Future<void> login(
-      BuildContext context,
-      String email,
-      String password,
-      ) async {
+  Future<void> login(String email, String password) async {
     _setLoading(true);
     try {
       final user = await _repo.login(email, password);
-      if (user == null) throw Exception("Không thể đăng nhập");
+      if (user == null) {
+        throw Exception("Không thể đăng nhập");
+      }
       _user = user;
       notifyListeners();
-      _navigateAfterLogin(user);
+      // điều hướng vẫn do bootstrap() xử lý
     } catch (e) {
       debugPrint("Login error: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Lỗi đăng nhập: $e')),
-      );
+      rethrow; // để UI tự xử lý lỗi và show SnackBar
     } finally {
       _setLoading(false);
     }
   }
 
-  // 🔹 Đăng nhập bằng Google
+  // 🔹 Đăng nhập bằng Google (giữ nguyên, vẫn dùng context để SnackBar)
   Future<void> loginWithGoogle(BuildContext context) async {
     _setLoading(true);
     try {
@@ -106,23 +136,19 @@ class AppAuthProvider extends ChangeNotifier {
 
       _user = user;
       notifyListeners();
-      _navigateAfterLogin(user);
+      // Điều hướng vẫn do bootstrap xử lý
     } catch (e) {
       debugPrint("Google login error: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Lỗi đăng nhập Google: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Lỗi đăng nhập Google: $e')));
     } finally {
       _setLoading(false);
     }
   }
 
-  // 🔹 Đăng ký tài khoản → quay lại login
-  Future<void> register(
-      BuildContext context,
-      String email,
-      String password,
-      ) async {
+  // 🔹 Đăng ký tài khoản → không tự SnackBar, không tự điều hướng
+  Future<void> register(String email, String password) async {
     _setLoading(true);
     _justRegistered = true;
     try {
@@ -130,20 +156,12 @@ class AppAuthProvider extends ChangeNotifier {
       _user = user;
       notifyListeners();
 
+      // Đăng xuất ngay sau khi tạo tài khoản để quay lại màn login
       await _repo.logout();
       _user = null;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Đăng ký thành công 🎉 Vui lòng đăng nhập!"),
-        ),
-      );
-
-      Navigator.pushReplacementNamed(context, AppRouter.login);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Lỗi đăng ký: $e")),
-      );
+      debugPrint("Register error: $e");
+      rethrow; // UI sẽ bắt để show message đẹp
     } finally {
       _setLoading(false);
       _justRegistered = false;
@@ -167,23 +185,24 @@ class AppAuthProvider extends ChangeNotifier {
     _setLoading(true);
     try {
       await _repo.resetPassword(email);
+    } catch (e) {
+      debugPrint('Reset password error: $e');
+      rethrow;
     } finally {
       _setLoading(false);
     }
   }
 
-  // 🔹 Cập nhật hồ sơ (student + tutor) — có availabilityNote
+  // 🔹 Cập nhật hồ sơ
   Future<void> updateProfile(
       String name,
       String goal, {
         String? avatarUrl,
-
-        // field cho tutor – student bỏ trống
         String? subject,
         String? bio,
         double? price,
         String? experience,
-        String? availabilityNote, // 🆕
+        String? availabilityNote,
       }) async {
     if (_user == null) return;
     try {
@@ -196,7 +215,7 @@ class AppAuthProvider extends ChangeNotifier {
         bio: bio,
         price: price,
         experience: experience,
-        availabilityNote: availabilityNote, // 🆕
+        availabilityNote: availabilityNote,
       );
 
       _user = _user!.copyWith(
@@ -217,6 +236,3 @@ class AppAuthProvider extends ChangeNotifier {
     }
   }
 }
-
-// 🌍 Biến global Navigator
-final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();

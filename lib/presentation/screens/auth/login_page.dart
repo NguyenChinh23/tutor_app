@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:tutor_app/presentation/screens/auth/register_page.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
 import '../../../config/app_router.dart';
 import '../../provider/auth_provider.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:tutor_app/presentation/screens/auth/login_page.dart';
-import 'package:tutor_app/presentation/screens/auth/reset_password_screen.dart';
-
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -20,8 +17,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final passwordController = TextEditingController();
   bool _obscure = true;
 
-  // Regex kiểm tra định dạng email
-  final _emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+  final _emailRegex =
+  RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$'); // kiểm tra định dạng email
 
   void _showSnack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
@@ -39,14 +36,15 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // 🔹 Logo + Tiêu đề
+              // Logo
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: Colors.indigo.shade50,
                 ),
-                child: const Icon(Icons.school, size: 80, color: Colors.indigo),
+                child:
+                const Icon(Icons.school, size: 80, color: Colors.indigo),
               ),
               const SizedBox(height: 18),
               const Text(
@@ -59,7 +57,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 40),
 
-              // 🔸 Email
+              // Email
               TextField(
                 controller: emailController,
                 keyboardType: TextInputType.emailAddress,
@@ -75,7 +73,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 16),
 
-              // 🔸 Password
+              // Password
               TextField(
                 controller: passwordController,
                 obscureText: _obscure,
@@ -111,7 +109,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 10),
 
-              // 🔹 Nút Đăng nhập
+              // Nút Đăng nhập
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -129,7 +127,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     final email = emailController.text.trim();
                     final pass = passwordController.text.trim();
 
-                    // Kiểm tra đầu vào
                     if (email.isEmpty || pass.isEmpty) {
                       _showSnack("Vui lòng nhập đầy đủ thông tin!");
                       return;
@@ -139,31 +136,33 @@ class _LoginScreenState extends State<LoginScreen> {
                       return;
                     }
                     if (pass.length < 6) {
-                      _showSnack("Mật khẩu phải có ít nhất 6 ký tự!");
-                      return;
+                      _showSnack(
+                          "Mật khẩu phải có ít nhất 8 ký tự");
+                      // vẫn cho phép đăng nhập vì có thể tài khoản cũ dùng mk ngắn
                     }
 
                     try {
-                      // 🧹 Clear session cũ
+                      // clear session cũ
                       await FirebaseAuth.instance.signOut();
-
-                      await auth.login(context, email, pass);
+                      await auth.login(email, pass);
+                      // thành công -> bootstrap sẽ tự điều hướng
                     } on FirebaseAuthException catch (e) {
-                      if (e.code == 'wrong-password') {
-                        _showSnack("Sai mật khẩu! Vui lòng thử lại.");
-                      } else if (e.code == 'user-not-found') {
+                      if (e.code == 'user-not-found') {
                         _showSnack("Tài khoản không tồn tại!");
-                      } else if (e.code == 'invalid-credential') {
-                        _showSnack(
-                            "Thông tin đăng nhập không hợp lệ! (Có thể mật khẩu vừa được đổi)");
+                      } else if (e.code == 'wrong-password' ||
+                          e.code == 'invalid-credential') {
+                        _showSnack("Tài khoản hoặc mật khẩu không đúng!");
                       } else if (e.code == 'too-many-requests') {
                         _showSnack(
-                            "Đăng nhập quá nhiều lần. Vui lòng thử lại sau!");
+                            "Đăng nhập thất bại nhiều lần. Vui lòng thử lại sau!");
+                      } else if (e.code == 'invalid-email') {
+                        _showSnack("Email không hợp lệ!");
                       } else {
-                        _showSnack("Lỗi: ${e.message}");
+                        _showSnack("Lỗi đăng nhập: ${e.message}");
                       }
                     } catch (e) {
-                      _showSnack("Đăng nhập thất bại: $e");
+                      _showSnack(
+                          "Đăng nhập thất bại. Vui lòng thử lại sau!");
                     }
                   },
                   child: auth.isLoading
@@ -183,7 +182,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const Text("hoặc", style: TextStyle(color: Colors.grey)),
               const SizedBox(height: 22),
 
-              // 🔹 Nút Google
+              // Nút Google (giữ nguyên)
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton(
@@ -229,7 +228,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   const Text("Chưa có tài khoản? "),
                   GestureDetector(
-                    onTap: () => Navigator.pushNamed(context, AppRouter.signup),
+                    onTap: () =>
+                        Navigator.pushNamed(context, AppRouter.signup),
                     child: const Text(
                       "Đăng ký ngay",
                       style: TextStyle(
