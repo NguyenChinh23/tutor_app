@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:tutor_app/config/app_router.dart';
-import '../../provider/auth_provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:tutor_app/config/app_router.dart';
+
+import '../../provider/auth_provider.dart';
+import '../../../config/app_router.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -19,7 +19,13 @@ class _SignupScreenState extends State<SignupScreen> {
   bool _hidePassword = true;
   bool _hideConfirm = true;
 
-  final _emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+  final _emailRegex =
+  RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+
+  // ít nhất 8 ký tự, có hoa, thường, số, ký tự đặc biệt
+  final _passwordRegex = RegExp(
+    r'^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[!@#\$&*~]).{8,}$',
+  );
 
   void _showSnack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
@@ -45,7 +51,7 @@ class _SignupScreenState extends State<SignupScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // 🔹 Icon + Title
+              // Icon + Title
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -66,7 +72,7 @@ class _SignupScreenState extends State<SignupScreen> {
               ),
               const SizedBox(height: 30),
 
-              // 📨 Email
+              // Email
               TextField(
                 controller: emailController,
                 keyboardType: TextInputType.emailAddress,
@@ -82,7 +88,7 @@ class _SignupScreenState extends State<SignupScreen> {
               ),
               const SizedBox(height: 16),
 
-              // 🔑 Password
+              // Password
               TextField(
                 controller: passwordController,
                 obscureText: _hidePassword,
@@ -107,7 +113,7 @@ class _SignupScreenState extends State<SignupScreen> {
               ),
               const SizedBox(height: 16),
 
-              // 🔁 Confirm Password
+              // Confirm Password
               TextField(
                 controller: confirmController,
                 obscureText: _hideConfirm,
@@ -130,9 +136,23 @@ class _SignupScreenState extends State<SignupScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 25),
+              const SizedBox(height: 8),
 
-              // 🔹 Nút Đăng ký
+              // Gợi ý rule mật khẩu
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  "Mật khẩu phải có ít nhất 8 ký tự, bao gồm:\n"
+                      "- Chữ hoa\n"
+                      "- Chữ thường\n"
+                      "- Số\n"
+                      "- Ký tự đặc biệt (!@#\$&*~)",
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ),
+              const SizedBox(height: 18),
+
+              // Nút Đăng ký
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -150,7 +170,6 @@ class _SignupScreenState extends State<SignupScreen> {
                     final pass = passwordController.text.trim();
                     final confirm = confirmController.text.trim();
 
-                    // Kiểm tra lỗi cơ bản
                     if (email.isEmpty || pass.isEmpty || confirm.isEmpty) {
                       _showSnack("Vui lòng nhập đủ thông tin!");
                       return;
@@ -159,8 +178,9 @@ class _SignupScreenState extends State<SignupScreen> {
                       _showSnack("Email không hợp lệ!");
                       return;
                     }
-                    if (pass.length < 6) {
-                      _showSnack("Mật khẩu phải có ít nhất 6 ký tự!");
+                    if (!_passwordRegex.hasMatch(pass)) {
+                      _showSnack(
+                          "Mật khẩu không đủ mạnh! Vui lòng làm theo hướng dẫn bên dưới.");
                       return;
                     }
                     if (pass != confirm) {
@@ -169,17 +189,27 @@ class _SignupScreenState extends State<SignupScreen> {
                     }
 
                     try {
-                      await auth.register(context, email, pass);
-                      _showSnack("Đăng ký thành công ");
-                      Navigator.of(context).pushNamed(AppRouter.login);
+                      await auth.register(email, pass);
+
+                      _showSnack(
+                          "Đăng ký thành công 🎉 Vui lòng đăng nhập!");
+                      Navigator.of(context)
+                          .pushReplacementNamed(AppRouter.login);
                     } on FirebaseAuthException catch (e) {
                       if (e.code == 'email-already-in-use') {
-                        _showSnack("Email này đã được sử dụng!");
+                        _showSnack(
+                            "Email này đã được sử dụng. Vui lòng dùng email khác.");
+                      } else if (e.code == 'invalid-email') {
+                        _showSnack("Email không hợp lệ!");
+                      } else if (e.code == 'weak-password') {
+                        _showSnack(
+                            "Mật khẩu quá yếu. Vui lòng chọn mật khẩu mạnh hơn.");
                       } else {
                         _showSnack("Lỗi đăng ký: ${e.message}");
                       }
                     } catch (e) {
-                      _showSnack("Đăng ký thất bại: $e");
+                      _showSnack(
+                          "Đăng ký thất bại. Vui lòng thử lại sau!");
                     }
                   },
                   child: auth.isLoading
