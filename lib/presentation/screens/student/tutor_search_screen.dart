@@ -1,18 +1,19 @@
-import 'dart:async';
-import 'dart:convert'; // 👈 THÊM
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+
 import 'package:tutor_app/config/theme.dart';
 import 'package:tutor_app/presentation/provider/tutor_provider.dart';
-import 'package:tutor_app/data/models/recent_search_item.dart';
-import 'package:tutor_app/data/repositories/recent_search_repository.dart';
+import 'package:tutor_app/presentation/provider/tutor_search_provider.dart';
 import 'package:tutor_app/presentation/screens/student/tutor_detail_screen.dart';
 import 'package:tutor_app/data/models/tutor_model.dart';
+import 'package:tutor_app/data/models/recent_search_item.dart';
 
 String _fmtVnd(num v) =>
-    NumberFormat.currency(locale: 'vi_VN', symbol: '', decimalDigits: 0).format(v);
+    NumberFormat.currency(locale: 'vi_VN', symbol: '', decimalDigits: 0)
+        .format(v);
 
 String _initials(String name) {
   final p = name.trim().split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
@@ -40,99 +41,39 @@ ImageProvider? _buildAvatar(String? avatarUrl) {
 
 class TutorSearchScreen extends StatefulWidget {
   const TutorSearchScreen({super.key});
+
   @override
   State<TutorSearchScreen> createState() => _TutorSearchScreenState();
 }
 
 class _TutorSearchScreenState extends State<TutorSearchScreen> {
   final _controller = TextEditingController();
-  final _repo = RecentSearchRepository();
-  Timer? _debounce;
-
-  String _query = '';
-  List<RecentSearchItem> _recent = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadRecent();
-  }
 
   @override
   void dispose() {
-    _debounce?.cancel();
     _controller.dispose();
     super.dispose();
   }
 
-  Future<void> _loadRecent() async {
-    _recent = await _repo.load();
-    if (mounted) setState(() {});
-  }
-
-  Future<void> _clearAllRecentQuick() async {
-    _recent = await _repo.clear();
-    if (mounted) setState(() {});
-  }
-
-  void _onQueryChanged(String q) {
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 300), () {
-      setState(() => _query = q);
-    });
-  }
-
-  Future<void> _onSubmitted(String q) async {
-    _recent = await _repo.addTerm(_recent, q);
-    if (mounted) setState(() => _query = q);
-  }
-
-  void _clearQuery() {
+  void _handleClearQuery(
+      TutorSearchProvider search, List<TutorModel> tutors) {
     _controller.clear();
-    setState(() => _query = '');
-  }
-
-  //  Chỉ trả kết quả khi có từ khóa
-  List<dynamic> _filter(List<dynamic> tutors, String q) {
-    final s = q.trim().toLowerCase();
-    if (s.isEmpty) return const [];
-    return tutors.where((t) {
-      final name = (t.name ?? '').toString().toLowerCase();
-      final subject = (t.subject ?? '').toString().toLowerCase();
-      return name.contains(s) || subject.contains(s);
-    }).toList();
-  }
-
-  List<RecentSearchItem> _buildUnified(List<dynamic> tutors) {
-    final results = _filter(tutors, _query);
-    final out = <RecentSearchItem>[
-      for (final t in results)
-        RecentSearchItem(
-          type: 'tutor',
-          term: (t.name ?? '').toString(),
-          name: (t.name ?? '').toString(),
-          subject: (t.subject ?? '').toString(),
-          avatarUrl: t.avatarUrl,
-          price: (t.price as num?)?.toDouble() ?? 0,
-          rating: (t.rating as num?)?.toDouble() ?? 0,
-        ),
-    ];
-    final exists = out.map((e) => e.term.toLowerCase()).toSet();
-    final src = _recent.length > 5 ? _recent.sublist(0, 5) : _recent;
-    for (final r in src) {
-      if (!exists.contains(r.term.toLowerCase())) out.add(r);
-    }
-    return out;
+    search.clearQuery(tutors);
   }
 
   @override
   Widget build(BuildContext context) {
     final primary = AppTheme.primaryColor;
-    final provider = context.watch<TutorProvider>();
-    final tutors = provider.tutors;
 
-    final unified = _buildUnified(tutors);
-    final onlyRecent = _query.trim().isEmpty;
+    final tutorProvider = context.watch<TutorProvider>();
+    final searchProvider = context.watch<TutorSearchProvider>();
+
+    final tutors = tutorProvider.tutors;
+    final query = searchProvider.query.trim();
+    final hasQuery = query.isNotEmpty;
+
+    final results = searchProvider.results;      // danh sách gia sư sau khi search
+    final recents = searchProvider.recent;      // lịch sử gần đây
 
     return Scaffold(
       backgroundColor: Colors.grey[100],
@@ -145,18 +86,25 @@ class _TutorSearchScreenState extends State<TutorSearchScreen> {
         ),
         actions: [
           if (_controller.text.isNotEmpty)
-            IconButton(icon: const Icon(Icons.clear), onPressed: _clearQuery),
+            IconButton(
+              icon: const Icon(Icons.clear),
+              onPressed: () => _handleClearQuery(searchProvider, tutors),
+            ),
         ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            //  Ô tìm kiếm
+            // 🔍 Ô tìm kiếm
             TextField(
               controller: _controller,
-              onChanged: _onQueryChanged,
-              onSubmitted: _onSubmitted,
+              onChanged: (value) {
+                searchProvider.onQueryChanged(value, tutors);
+              },
+              onSubmitted: (value) {
+                searchProvider.onSubmitted(value, tutors);
+              },
               textInputAction: TextInputAction.search,
               decoration: InputDecoration(
                 prefixIcon: const Icon(Icons.search),
@@ -164,7 +112,10 @@ class _TutorSearchScreenState extends State<TutorSearchScreen> {
                 filled: true,
                 fillColor: Colors.white,
                 suffixIcon: _controller.text.isNotEmpty
-                    ? IconButton(icon: const Icon(Icons.close), onPressed: _clearQuery)
+                    ? IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => _handleClearQuery(searchProvider, tutors),
+                )
                     : null,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -175,7 +126,7 @@ class _TutorSearchScreenState extends State<TutorSearchScreen> {
 
             const SizedBox(height: 12),
 
-            // Kết quả & gần đây
+            // 🔁 Kết quả / Gần đây
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
@@ -189,13 +140,13 @@ class _TutorSearchScreenState extends State<TutorSearchScreen> {
                       child: Row(
                         children: [
                           Text(
-                            onlyRecent ? 'Gần đây' : 'Kết quả & gần đây',
+                            hasQuery ? 'Kết quả cho "$query"' : 'Kết quả gần đây',
                             style: const TextStyle(fontWeight: FontWeight.w700),
                           ),
                           const Spacer(),
-                          if (_recent.isNotEmpty)
+                          if (!hasQuery && recents.isNotEmpty)
                             TextButton(
-                              onPressed: _clearAllRecentQuick,
+                              onPressed: () => searchProvider.clearAllRecent(),
                               child: const Text('Xóa tất cả'),
                             ),
                         ],
@@ -204,128 +155,11 @@ class _TutorSearchScreenState extends State<TutorSearchScreen> {
                     const SizedBox(height: 4),
 
                     Expanded(
-                      child: ListView.builder(
-                        itemCount: unified.length,
-                        itemBuilder: (_, i) {
-                          final it = unified[i];
-                          final isTutor = it.type == 'tutor';
-                          final displayName = isTutor ? (it.name ?? it.term) : it.term;
-
-                          final avatarImage = _buildAvatar(it.avatarUrl); // 👈 dùng helper
-
-                          return ListTile(
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 6),
-                            leading: CircleAvatar(
-                              radius: 20,
-                              backgroundColor: primary.withOpacity(0.08),
-                              backgroundImage: avatarImage,
-                              child: avatarImage == null
-                                  ? Text(
-                                _initials(displayName),
-                                style: TextStyle(
-                                  color: primary,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              )
-                                  : null,
-                            ),
-                            title: Text(
-                              displayName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontWeight: FontWeight.w700),
-                            ),
-                            subtitle: isTutor
-                                ? Row(
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    it.subject ?? '',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                const Icon(Icons.star,
-                                    size: 14, color: Colors.amber),
-                                const SizedBox(width: 2),
-                                Text(
-                                  ((it.rating ?? 0).toStringAsFixed(1)),
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w600),
-                                ),
-                                const SizedBox(width: 10),
-                                Text(
-                                  "${_fmtVnd(it.price ?? 0)} đ/h",
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w600),
-                                ),
-                              ],
-                            )
-                                : Text('Từ khóa',
-                                style: TextStyle(color: Colors.grey[600])),
-                            trailing: PopupMenuButton<String>(
-                              onSelected: (v) async {
-                                if (v == 'delete') {
-                                  _recent = await _repo.remove(_recent, it);
-                                  setState(() {});
-                                }
-                              },
-                              itemBuilder: (_) => const [
-                                PopupMenuItem(
-                                    value: 'delete',
-                                    child: Text('Xóa khỏi danh sách')),
-                              ],
-                              icon: const Icon(Icons.more_vert),
-                            ),
-                            onTap: () async {
-                              if (isTutor) {
-                                // Lưu vào recent nếu là tutor
-                                _recent = await _repo.addTutor(
-                                  _recent,
-                                  name: it.name ?? it.term,
-                                  subject: it.subject ?? '',
-                                  price: it.price ?? 0,
-                                  rating: it.rating ?? 0,
-                                  avatarUrl: it.avatarUrl,
-                                );
-                                setState(() {});
-
-                                //  Tìm TutorModel thật từ provider theo name (tạm thời)
-                                final provider = context.read<TutorProvider>();
-                                final List<TutorModel> match = provider.tutors
-                                    .where((t) =>
-                                t.name == (it.name ?? it.term))
-                                    .toList();
-
-                                if (match.isNotEmpty) {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          TutorDetailScreen(tutor: match.first),
-                                    ),
-                                  );
-                                } else {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                        content: Text(
-                                            'Không tìm thấy hồ sơ chi tiết của gia sư này.')),
-                                  );
-                                }
-                              } else {
-                                _controller.text = it.term;
-                                _controller.selection =
-                                    TextSelection.fromPosition(
-                                      TextPosition(offset: it.term.length),
-                                    );
-                                await _onSubmitted(it.term);
-                              }
-                            },
-                          );
-                        },
-                      ),
+                      child: hasQuery
+                          ? _buildSearchResults(
+                          context, results, searchProvider, primary)
+                          : _buildRecentList(
+                          context, recents, searchProvider, primary, tutors),
                     ),
                   ],
                 ),
@@ -336,4 +170,182 @@ class _TutorSearchScreenState extends State<TutorSearchScreen> {
       ),
     );
   }
+}
+
+// 📘 List kết quả tìm kiếm (CHỈ tutor, không trộn gần đây)
+Widget _buildSearchResults(
+    BuildContext context,
+    List<TutorModel> results,
+    TutorSearchProvider searchProvider,
+    Color primary,
+    ) {
+  if (results.isEmpty) {
+    return const Center(child: Text('Không tìm thấy gia sư phù hợp'));
+  }
+
+  return ListView.builder(
+    itemCount: results.length,
+    itemBuilder: (_, i) {
+      final t = results[i];
+      final avatarImage = _buildAvatar(t.avatarUrl);
+
+      return ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        leading: CircleAvatar(
+          radius: 20,
+          backgroundColor: primary.withOpacity(0.08),
+          backgroundImage: avatarImage,
+          child: avatarImage == null
+              ? Text(
+            _initials(t.name ?? ''),
+            style: TextStyle(
+              color: primary,
+              fontWeight: FontWeight.w700,
+            ),
+          )
+              : null,
+        ),
+        title: Text(
+          t.name ?? '',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        subtitle: Row(
+          children: [
+            Flexible(
+              child: Text(
+                t.subject ?? '',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Icon(Icons.star, size: 14, color: Colors.amber),
+            const SizedBox(width: 2),
+            Text(
+              (t.rating ?? 0).toStringAsFixed(1),
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              '${_fmtVnd(t.price ?? 0)} đ/h',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+        onTap: () async {
+          await searchProvider.addTutorToRecent(t);
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => TutorDetailScreen(tutor: t),
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
+// 📗 List lịch sử gần đây (tutor + keyword)
+Widget _buildRecentList(
+    BuildContext context,
+    List<RecentSearchItem> recents,
+    TutorSearchProvider searchProvider,
+    Color primary,
+    List<TutorModel> allTutors,
+    ) {
+  if (recents.isEmpty) {
+    return const Center(child: Text('Chưa có lịch sử tìm kiếm'));
+  }
+
+  return ListView.builder(
+    itemCount: recents.length,
+    itemBuilder: (_, i) {
+      final it = recents[i];
+      final isTutor = it.type == 'tutor';
+      final displayName = isTutor ? (it.name ?? it.term) : it.term;
+      final avatarImage = _buildAvatar(it.avatarUrl);
+
+      return ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        leading: CircleAvatar(
+          radius: 20,
+          backgroundColor: primary.withOpacity(0.08),
+          backgroundImage: avatarImage,
+          child: avatarImage == null
+              ? Text(
+            _initials(displayName),
+            style: TextStyle(
+              color: primary,
+              fontWeight: FontWeight.w700,
+            ),
+          )
+              : null,
+        ),
+        title: Text(
+          displayName,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        subtitle: isTutor
+            ? Text(
+          it.subject ?? '',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        )
+            : Text(
+          'Từ khóa',
+          style: TextStyle(color: Colors.grey[600]),
+        ),
+        trailing: PopupMenuButton<String>(
+          onSelected: (v) {
+            if (v == 'delete') {
+              searchProvider.removeRecent(it);
+            }
+          },
+          itemBuilder: (_) => const [
+            PopupMenuItem(
+              value: 'delete',
+              child: Text('Xóa khỏi danh sách'),
+            ),
+          ],
+          icon: const Icon(Icons.more_vert),
+        ),
+        onTap: () async {
+          if (isTutor) {
+            // tìm tutor thật trong allTutors theo name
+            final match = allTutors
+                .where((t) => t.name == (it.name ?? it.term))
+                .toList();
+
+            if (match.isNotEmpty) {
+              await searchProvider.addTutorToRecent(match.first);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => TutorDetailScreen(tutor: match.first),
+                ),
+              );
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content:
+                  Text('Không tìm thấy hồ sơ chi tiết của gia sư này.'),
+                ),
+              );
+            }
+          } else {
+            // recent là keyword -> search lại với term
+            final tutors = allTutors;
+            final q = it.term;
+            final sp = context.read<TutorSearchProvider>();
+            sp.onSubmitted(q, tutors);
+          }
+        },
+      );
+    },
+  );
 }

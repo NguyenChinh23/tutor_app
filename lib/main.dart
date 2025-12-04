@@ -13,6 +13,7 @@ import 'package:tutor_app/presentation/provider/admin_provider.dart';
 import 'package:tutor_app/presentation/provider/tutor_provider.dart';
 import 'package:tutor_app/presentation/provider/booking_provider.dart';
 import 'package:tutor_app/presentation/provider/notification_provider.dart';
+import 'package:tutor_app/presentation/provider/tutor_search_provider.dart';
 
 import 'package:tutor_app/data/repositories/booking_repository.dart';
 import 'package:tutor_app/data/services/notification_service.dart';
@@ -23,9 +24,7 @@ Future<void> main() async {
 
   await initializeDateFormatting('vi_VN', null);
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   runApp(const TutorApp());
 }
@@ -37,28 +36,17 @@ class TutorApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => AppAuthProvider()..bootstrap()),
+        ChangeNotifierProvider(create: (_) => TutorSearchProvider()),
+        ChangeNotifierProvider(create: (_) => AdminProvider()),
+        ChangeNotifierProvider(create: (_) => TutorProvider()),
         ChangeNotifierProvider(
-          create: (_) => AppAuthProvider()..bootstrap(),
-        ),
-        ChangeNotifierProvider(
-          create: (_) => AdminProvider(),
-        ),
-        ChangeNotifierProvider(
-          create: (_) => TutorProvider(),
-        ),
-
-        /// 🔹 BookingProvider KHÔNG dùng BookingService nữa
-        ChangeNotifierProvider(
-          create: (_) => BookingProvider(
-            repository: BookingRepository(),
-          ),
+          create: (_) => BookingProvider(repository: BookingRepository()),
         ),
 
         ChangeNotifierProvider(
           create: (_) => NotificationProvider(
-            repository: NotificationRepository(
-              NotificationService(),
-            ),
+            repository: NotificationRepository(NotificationService()),
           ),
         ),
       ],
@@ -69,17 +57,12 @@ class TutorApp extends StatelessWidget {
         onGenerateRoute: AppRouter.generateRoute,
         initialRoute: AppRouter.splash,
         theme: AppTheme.lightTheme,
-
-        // 🔥 THÊM PHẦN NÀY ĐỂ FIX showDatePicker / showTimePicker
         localizationsDelegates: const [
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
         ],
-        supportedLocales: const [
-          Locale('vi', 'VN'),
-          Locale('en', 'US'),
-        ],
+        supportedLocales: const [Locale('vi', 'VN'), Locale('en', 'US')],
       ),
     );
   }
