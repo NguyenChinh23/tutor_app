@@ -113,4 +113,50 @@ class BookingRepository {
       SetOptions(merge: true),
     );
   }
+
+  // ⭐ HÀM MỚI: tăng totalLessons & totalStudents cho gia sư
+  Future<void> increaseTutorStats({
+    required String tutorId,
+    required String studentId,
+  }) async {
+    final ref = _fs.collection('users').doc(tutorId);
+
+    await _fs.runTransaction((tx) async {
+      final snap = await tx.get(ref);
+      final data = snap.data() ?? {};
+
+      int _toInt(dynamic v) {
+        if (v == null) return 0;
+        if (v is int) return v;
+        if (v is num) return v.toInt();
+        if (v is String) return int.tryParse(v) ?? 0;
+        return 0;
+      }
+
+      final int totalLessons = _toInt(data['totalLessons']);
+      final int totalStudents = _toInt(data['totalStudents']);
+
+      final List<dynamic> studentsTaughtRaw =
+      (data['studentsTaught'] ?? []) as List<dynamic>;
+      final List<String> studentsTaught =
+      studentsTaughtRaw.map((e) => e.toString()).toList();
+
+      bool isNewStudent = false;
+      if (!studentsTaught.contains(studentId)) {
+        isNewStudent = true;
+        studentsTaught.add(studentId);
+      }
+
+      tx.set(
+        ref,
+        {
+          'totalLessons': totalLessons + 1,
+          'totalStudents':
+          totalStudents + (isNewStudent ? 1 : 0),
+          'studentsTaught': studentsTaught,
+        },
+        SetOptions(merge: true),
+      );
+    });
+  }
 }

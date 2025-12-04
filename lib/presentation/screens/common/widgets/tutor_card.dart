@@ -1,5 +1,4 @@
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:tutor_app/config/theme.dart';
@@ -30,7 +29,6 @@ class TutorCard extends StatelessWidget {
       if (avatarUrl.startsWith('http')) {
         return NetworkImage(avatarUrl);
       } else {
-        // base64
         final bytes = base64Decode(avatarUrl);
         return MemoryImage(bytes);
       }
@@ -63,10 +61,14 @@ class TutorCard extends StatelessWidget {
             backgroundImage: _buildAvatar(tutor.avatarUrl),
           ),
           const SizedBox(width: 12),
+
+          //       THÔNG TIN GIA SƯ
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+
+                // Tên gia sư
                 Text(
                   tutor.name,
                   maxLines: 1,
@@ -76,7 +78,10 @@ class TutorCard extends StatelessWidget {
                     fontSize: 16,
                   ),
                 ),
+
                 const SizedBox(height: 4),
+
+                // Môn dạy
                 Text(
                   tutor.subject,
                   style: const TextStyle(
@@ -84,7 +89,10 @@ class TutorCard extends StatelessWidget {
                     color: Colors.black54,
                   ),
                 ),
-                const SizedBox(height: 4),
+
+                const SizedBox(height: 6),
+
+                // ⭐ Rating + Giá
                 Row(
                   children: [
                     const Icon(Icons.star,
@@ -97,7 +105,7 @@ class TutorCard extends StatelessWidget {
                         fontWeight: FontWeight.w500,
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 12),
                     Text(
                       '${_currencyFmt.format(tutor.price)}/h',
                       style: const TextStyle(
@@ -108,15 +116,39 @@ class TutorCard extends StatelessWidget {
                     ),
                   ],
                 ),
+
+                const SizedBox(height: 6),
+
+                // 🔥 Dòng mới: Số buổi dạy & Số học viên
+                Row(
+                  children: [
+                    Icon(Icons.menu_book, size: 14, color: Colors.blue[700]),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${tutor.totalLessons} buổi',
+                      style: const TextStyle(fontSize: 12, color: Colors.black87),
+                    ),
+                    const SizedBox(width: 12),
+                    Icon(Icons.people, size: 14, color: Colors.deepPurple),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${tutor.totalStudents} học viên',
+                      style: const TextStyle(fontSize: 12, color: Colors.black87),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
-          const SizedBox(width: 8),
+
+          const SizedBox(width: 10),
+
+          //   Nút BOOK
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.primaryColor,
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 8),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),

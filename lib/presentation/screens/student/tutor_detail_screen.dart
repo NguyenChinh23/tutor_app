@@ -84,7 +84,11 @@ class _TutorDetailScreenState extends State<TutorDetailScreen> {
     final experience = tutor.experience;
     final verified = tutor.isTutorVerified;
     final email = tutor.email;
-    final availability = tutor.availabilityNote; // 🆕 lấy lịch rảnh
+    final availability = tutor.availabilityNote; // lịch rảnh
+
+    // 🆕 thống kê
+    final int totalLessons = tutor.totalLessons;     // cần có trong TutorModel
+    final int totalStudents = tutor.totalStudents;   // cần có trong TutorModel
 
     final avatarImage = _buildTutorAvatar(avatarUrl);
 
@@ -94,6 +98,8 @@ class _TutorDetailScreenState extends State<TutorDetailScreen> {
         backgroundColor: primary,
         title: const Text('Thông tin gia sư'),
       ),
+
+      // 🧿 BOTTOM BAR: chỉ còn nút Book, bỏ Chat
       bottomNavigationBar: SafeArea(
         child: Container(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
@@ -106,40 +112,24 @@ class _TutorDetailScreenState extends State<TutorDetailScreen> {
               ),
             ],
           ),
-          child: Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Mở chat (demo)'),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.chat_bubble_outline),
-                  label: const Text('Chat'),
-                ),
+          child: ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primary,
+              minimumSize: const Size.fromHeight(48),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primary,
-                    minimumSize: const Size.fromHeight(48),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  onPressed: _openBookingScreen,
-                  icon: const Icon(Icons.calendar_today_outlined),
-                  label: const Text('Book'),
-                ),
-              ),
-            ],
+            ),
+            onPressed: _openBookingScreen,
+            icon: const Icon(Icons.calendar_today_outlined),
+            label: const Text(
+              'Book buổi học',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
           ),
         ),
       ),
+
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -239,6 +229,36 @@ class _TutorDetailScreenState extends State<TutorDetailScreen> {
                           ),
                         ],
                       ),
+
+                      const SizedBox(height: 6),
+
+                      // 🆕 Hàng thống kê số buổi & học viên
+                      Row(
+                        children: [
+                          const Icon(Icons.menu_book_outlined,
+                              size: 16, color: Colors.indigo),
+                          const SizedBox(width: 4),
+                          Text(
+                            '$totalLessons buổi dạy',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          const Icon(Icons.people_alt_outlined,
+                              size: 16, color: Colors.teal),
+                          const SizedBox(width: 4),
+                          Text(
+                            '$totalStudents học viên',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+
                       const SizedBox(height: 8),
                       Row(
                         children: [

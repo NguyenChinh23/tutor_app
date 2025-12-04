@@ -11,6 +11,8 @@ class TutorModel {
   final String experience;
   final bool isTutorVerified;
   final String availabilityNote;
+  final int totalLessons;   // tổng số buổi dạy đã hoàn thành
+  final int totalStudents;  // tổng số học viên đã dạy
 
   TutorModel({
     required this.uid,
@@ -24,6 +26,8 @@ class TutorModel {
     required this.experience,
     this.isTutorVerified = false,
     this.availabilityNote = '',
+    this.totalLessons = 0,
+    this.totalStudents = 0,
   });
 
   factory TutorModel.fromMap(String id, Map<String, dynamic> data) {
@@ -31,6 +35,14 @@ class TutorModel {
       if (v is int) return v.toDouble();
       if (v is num) return v.toDouble();
       if (v is String) return double.tryParse(v) ?? 0;
+      return 0;
+    }
+
+    int _toInt(dynamic v) {
+      if (v == null) return 0;
+      if (v is int) return v;
+      if (v is num) return v.toInt();
+      if (v is String) return int.tryParse(v) ?? 0;
       return 0;
     }
 
@@ -49,9 +61,13 @@ class TutorModel {
       rating: _toDouble(data['rating'] ?? 0),
       experience: (data['experience'] ?? '').toString(),
 
-      /// đọc field mới, nếu chưa có thì rỗng
+      /// đọc field mới, nếu chưa có thì rỗng / 0
       availabilityNote: (data['availabilityNote'] ?? '').toString(),
       isTutorVerified: data['isTutorVerified'] == true,
+
+      // 🔹 đọc từ Firestore, nếu chưa có thì = 0
+      totalLessons: _toInt(data['totalLessons']),
+      totalStudents: _toInt(data['totalStudents']),
     );
   }
 
@@ -67,6 +83,9 @@ class TutorModel {
       'experience': experience,
       'isTutorVerified': isTutorVerified,
       'availabilityNote': availabilityNote,
+      // 🔹 ghi thêm 2 field mới
+      'totalLessons': totalLessons,
+      'totalStudents': totalStudents,
     };
   }
 }

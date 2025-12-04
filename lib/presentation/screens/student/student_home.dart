@@ -32,7 +32,6 @@ class StudentHomeScreen extends StatefulWidget {
 }
 
 class _StudentHomeScreenState extends State<StudentHomeScreen> {
-  /// 0: Home, 1: My Lessons, 2: Profile
   int _selectedIndex = 0;
 
   List<String> selectedSubjects = [];
@@ -88,11 +87,10 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
     final tutorProvider = context.watch<TutorProvider>();
     final user = auth.user;
 
-    // 3 màn tương ứng 3 item bottom
     final List<Widget> screens = [
-      _buildHome(context, user, tutorProvider), // index 0
-      const StudentMyLessonsScreen(),           // index 1
-      const StudentProfileScreen(),            // index 2
+      _buildHome(context, user, tutorProvider),
+      const StudentMyLessonsScreen(),
+      const StudentProfileScreen(),
     ];
 
     return Scaffold(
@@ -127,6 +125,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
       ) {
     final notif = context.watch<NotificationProvider>();
 
+    //  Lọc theo subject / price / rating
     final tutors = tutorProvider.tutors.where((tutor) {
       final subjectMatch = selectedSubjects.isEmpty ||
           selectedSubjects.any(
@@ -140,7 +139,23 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
       final ratingMatch = tutor.rating >= minRating;
 
       return subjectMatch && priceMatch && ratingMatch;
-    }).toList();
+    }).toList()
+    // 🎯 Sắp xếp: rating ↓ → totalLessons ↓ → totalStudents ↓
+      ..sort((a, b) {
+        final ratingA = a.rating;
+        final ratingB = b.rating;
+        final cmpRating = ratingB.compareTo(ratingA);
+        if (cmpRating != 0) return cmpRating;
+
+        final lessonsA = a.totalLessons;
+        final lessonsB = b.totalLessons;
+        final cmpLessons = lessonsB.compareTo(lessonsA);
+        if (cmpLessons != 0) return cmpLessons;
+
+        final studentsA = a.totalStudents;
+        final studentsB = b.totalStudents;
+        return studentsB.compareTo(studentsA);
+      });
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
@@ -163,15 +178,14 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
           ),
           child: SafeArea(
             child: Padding(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 8),
               child: Row(
                 children: [
                   CircleAvatar(
                     radius: 22,
-                    backgroundImage: _buildUserAvatar(
-                      user?.avatarUrl as String?,
-                    ),
+                    backgroundImage:
+                    _buildUserAvatar(user?.avatarUrl as String?),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -195,8 +209,6 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                       ],
                     ),
                   ),
-
-                  // 🔔 Nút thông báo
                   IconButton(
                     onPressed: () {
                       Navigator.push(
@@ -302,18 +314,19 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                   children: tutors
                       .map(
                         (tutor) => AnimatedOpacity(
-                      duration:
-                      const Duration(milliseconds: 400),
+                      duration: const Duration(
+                          milliseconds: 400),
                       opacity: 1,
                       child: InkWell(
                         onTap: () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => TutorDetailScreen(
-                                tutor: tutor,
-                                autoOpenBook: false,
-                              ),
+                              builder: (_) =>
+                                  TutorDetailScreen(
+                                    tutor: tutor,
+                                    autoOpenBook: false,
+                                  ),
                             ),
                           );
                         },
@@ -369,8 +382,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
       minPrice = (result["minPrice"] as num?)?.toDouble() ?? 0;
       maxPrice =
           (result["maxPrice"] as num?)?.toDouble() ?? priceMaxLimit;
-      minRating =
-          (result["minRating"] as num?)?.toDouble() ?? 0;
+      minRating = (result["minRating"] as num?)?.toDouble() ?? 0;
     });
   }
 
@@ -384,20 +396,19 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                    builder: (_) => const TutorSearchScreen()),
+                  builder: (_) => const TutorSearchScreen(),
+                ),
               );
             },
             child: Container(
               height: 48,
-              padding:
-              const EdgeInsets.symmetric(horizontal: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(14),
                 boxShadow: [
                   BoxShadow(
-                    color:
-                    Colors.black12.withOpacity(0.08),
+                    color: Colors.black12.withOpacity(0.08),
                     blurRadius: 6,
                     offset: const Offset(0, 2),
                   ),
@@ -427,20 +438,18 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
             height: 46,
             width: 46,
             decoration: BoxDecoration(
-              color:
-              AppTheme.primaryColor.withOpacity(0.10),
+              color: AppTheme.primaryColor.withOpacity(0.10),
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color:
-                  Colors.black12.withOpacity(0.06),
+                  color: Colors.black12.withOpacity(0.06),
                   blurRadius: 6,
                   offset: const Offset(0, 2),
                 ),
               ],
             ),
-            child: Icon(Icons.tune,
-                color: AppTheme.primaryColor),
+            child:
+            Icon(Icons.tune, color: AppTheme.primaryColor),
           ),
         ),
       ],
@@ -468,12 +477,11 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         margin: const EdgeInsets.only(right: 10),
-        padding:
-        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.symmetric(
+            horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected
-              ? AppTheme.primaryColor
-              : Colors.white,
+          color:
+          isSelected ? AppTheme.primaryColor : Colors.white,
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
