@@ -1,7 +1,9 @@
+// lib/presentation/screens/profile/tutor_profile_screen.dart
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import 'package:tutor_app/config/app_router.dart';
 import 'package:tutor_app/config/theme.dart';
 import 'package:tutor_app/presentation/provider/auth_provider.dart';
@@ -29,7 +31,7 @@ class TutorProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final auth = Provider.of<AppAuthProvider>(context);
+    final auth = context.watch<AppAuthProvider>();
     final user = auth.user;
 
     if (user == null) {
@@ -41,7 +43,7 @@ class TutorProfileScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
-        title: const Text("My Profile"),   // ⭐ ĐÃ ĐỔI TÊN
+        title: const Text("My Profile"),
         centerTitle: true,
         backgroundColor: AppTheme.primaryColor,
         automaticallyImplyLeading: false,
@@ -56,7 +58,6 @@ class TutorProfileScreen extends StatelessWidget {
               radius: 52,
               backgroundImage: _buildAvatar(user.avatarUrl),
             ),
-
             const SizedBox(height: 16),
 
             // Name
@@ -67,7 +68,6 @@ class TutorProfileScreen extends StatelessWidget {
                 fontWeight: FontWeight.bold,
               ),
             ),
-
             const SizedBox(height: 6),
 
             // Email
@@ -79,12 +79,12 @@ class TutorProfileScreen extends StatelessWidget {
                 fontWeight: FontWeight.w400,
               ),
             ),
-
             const SizedBox(height: 12),
 
-            // Check verified
+            // Verified / Pending
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
               decoration: BoxDecoration(
                 color: user.isTutorVerified
                     ? Colors.green.shade50
@@ -132,10 +132,17 @@ class TutorProfileScreen extends StatelessWidget {
               icon: Icons.edit,
               color: Colors.blueAccent,
               title: "Edit Profile",
-              onTap: () => Navigator.pushNamed(
-                context,
-                AppRouter.editProfile,
-              ),
+              onTap: () =>
+                  Navigator.pushNamed(context, AppRouter.editProfile),
+            ),
+
+            // 🔐 CHANGE PASSWORD
+            _profileTile(
+              icon: Icons.lock_reset,
+              color: Colors.purple,
+              title: "Change Password",
+              onTap: () =>
+                  Navigator.pushNamed(context, AppRouter.changePassword),
             ),
 
             const SizedBox(height: 16),
@@ -146,13 +153,9 @@ class TutorProfileScreen extends StatelessWidget {
               color: Colors.redAccent,
               title: "Logout",
               textColor: Colors.redAccent,
-              onTap: () {
-                context.read<AppAuthProvider>().logout();
-                Navigator.pushNamedAndRemoveUntil(
-                  context,
-                  AppRouter.login,
-                      (route) => false,
-                );
+              onTap: () async {
+                await context.read<AppAuthProvider>().logout();
+                // Không pushNamed nữa, bootstrap sẽ tự bắn về Login
               },
             ),
           ],
@@ -193,8 +196,11 @@ class TutorProfileScreen extends StatelessWidget {
             fontWeight: FontWeight.w500,
           ),
         ),
-        trailing: const Icon(Icons.arrow_forward_ios,
-            size: 16, color: Colors.grey),
+        trailing: const Icon(
+          Icons.arrow_forward_ios,
+          size: 16,
+          color: Colors.grey,
+        ),
         onTap: onTap,
       ),
     );

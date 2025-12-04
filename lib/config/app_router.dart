@@ -1,13 +1,19 @@
+// lib/config/app_router.dart
 import 'package:flutter/material.dart';
+
 import 'package:tutor_app/presentation/screens/auth/login_page.dart';
 import 'package:tutor_app/presentation/screens/auth/register_page.dart';
 import 'package:tutor_app/presentation/screens/auth/reset_password_screen.dart';
 import 'package:tutor_app/presentation/screens/common/splash_screen.dart';
 import 'package:tutor_app/presentation/screens/admin/admin_dashboard_screen.dart';
-import 'package:tutor_app/presentation/screens/student/student_home.dart' hide TutorHomeScreen;
+import 'package:tutor_app/presentation/screens/student/student_home.dart'
+    hide TutorHomeScreen;
 import 'package:tutor_app/presentation/screens/tutor/tutor_home.dart';
 import 'package:tutor_app/presentation/screens/profile/apply_tutor_screen.dart';
-import '../presentation/screens/profile/edit_profile_screen.dart';
+import 'package:tutor_app/presentation/screens/profile/edit_profile_screen.dart';
+
+// 🔹 THÊM IMPORT MÀN ĐỔI MẬT KHẨU
+import 'package:tutor_app/presentation/screens/student/change_password_screen.dart';
 
 class AppRouter {
   static const String splash = '/';
@@ -20,6 +26,9 @@ class AppRouter {
   static const String admin = '/admin';
   static const String editProfile = '/edit-profile';
 
+  // 🔹 KHAI BÁO THÊM ROUTE ĐỔI MẬT KHẨU
+  static const String changePassword = '/change-password';
+
   static Route<dynamic> generateRoute(RouteSettings settings) {
     switch (settings.name) {
       case splash:
@@ -29,7 +38,8 @@ class AppRouter {
       case signup:
         return MaterialPageRoute(builder: (_) => const SignupScreen());
       case resetPassword:
-        return MaterialPageRoute(builder: (_) => const ForgotPasswordScreen());
+        return MaterialPageRoute(
+            builder: (_) => const ForgotPasswordScreen());
       case studentHome:
         return MaterialPageRoute(builder: (_) => const StudentHomeScreen());
       case editProfile:
@@ -39,11 +49,18 @@ class AppRouter {
       case applyTutor:
         return MaterialPageRoute(builder: (_) => const ApplyTutorScreen());
       case admin:
-        return MaterialPageRoute(builder: (_) => const AdminDashboardScreen());
+        return MaterialPageRoute(
+            builder: (_) => const AdminDashboardScreen());
+
+    // 🔹 ROUTE ĐỔI MẬT KHẨU
+      case changePassword:
+        return MaterialPageRoute(
+            builder: (_) => const ChangePasswordScreen());
+
       default:
         return MaterialPageRoute(
           builder: (_) => const Scaffold(
-            body: Center(child: Text(' Route không tồn tại')),
+            body: Center(child: Text('Route không tồn tại')),
           ),
         );
     }

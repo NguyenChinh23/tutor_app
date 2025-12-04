@@ -1,3 +1,4 @@
+// lib/presentation/screens/profile/student_profile_screen.dart
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -32,7 +33,7 @@ class StudentProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final auth = Provider.of<AppAuthProvider>(context);
+    final auth = context.watch<AppAuthProvider>();
     final user = auth.user;
 
     if (user == null) {
@@ -47,9 +48,7 @@ class StudentProfileScreen extends StatelessWidget {
     if (isTutor) {
       final tutorProvider = context.watch<TutorProvider>();
       try {
-        tutor = tutorProvider.tutors.firstWhere(
-              (t) => t.uid == user.uid,
-        );
+        tutor = tutorProvider.tutors.firstWhere((t) => t.uid == user.uid);
       } catch (_) {
         tutor = null;
       }
@@ -64,8 +63,7 @@ class StudentProfileScreen extends StatelessWidget {
         automaticallyImplyLeading: false,
       ),
       body: SingleChildScrollView(
-        padding:
-        const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
@@ -77,9 +75,7 @@ class StudentProfileScreen extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               user.displayName ??
-                  (isTutor
-                      ? (tutor?.name ?? "Tutor")
-                      : "Student"),
+                  (isTutor ? (tutor?.name ?? "Tutor") : "Student"),
               style: const TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
@@ -108,8 +104,8 @@ class StudentProfileScreen extends StatelessWidget {
             if (user.role == 'student')
               if (user.goal != null && user.goal!.isNotEmpty)
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 6),
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                   decoration: BoxDecoration(
                     color: Colors.indigo.shade50,
                     borderRadius: BorderRadius.circular(20),
@@ -209,33 +205,36 @@ class StudentProfileScreen extends StatelessWidget {
                   Navigator.pushNamed(context, AppRouter.editProfile),
             ),
 
+            // 🔐 Change Password (dùng ChangePasswordScreen)
+            _profileTile(
+              icon: Icons.lock_reset,
+              color: Colors.purple,
+              title: "Change Password",
+              onTap: () =>
+                  Navigator.pushNamed(context, AppRouter.changePassword),
+            ),
+
             // 🎓 Apply Tutor (chỉ student)
             if (user.role == 'student')
               _profileTile(
                 icon: Icons.school_outlined,
                 color: Colors.deepPurple,
                 title: "Apply to Become a Tutor",
-                onTap: () => Navigator.pushNamed(
-                    context, AppRouter.applyTutor),
+                onTap: () =>
+                    Navigator.pushNamed(context, AppRouter.applyTutor),
               ),
 
             const SizedBox(height: 16),
 
-            // 🚪 Logout
+            // 🚪 Logout (chỉ logout, không điều hướng tay)
             _profileTile(
               icon: Icons.logout,
               color: Colors.redAccent,
               title: "Logout",
               textColor: Colors.redAccent,
               onTap: () async {
-                await auth.logout();
-                if (context.mounted) {
-                  Navigator.pushNamedAndRemoveUntil(
-                    context,
-                    AppRouter.login,
-                        (route) => false,
-                  );
-                }
+                await context.read<AppAuthProvider>().logout();
+                // authChanges + bootstrap sẽ tự điều hướng về Login
               },
             ),
           ],
@@ -265,8 +264,8 @@ class StudentProfileScreen extends StatelessWidget {
         ],
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(
-            horizontal: 18, vertical: 4),
+        contentPadding:
+        const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
         leading: Icon(icon, color: color, size: 22),
         title: Text(
           title,

@@ -1,6 +1,7 @@
 // lib/presentation/provider/auth_provider.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:tutor_app/data/models/user_model.dart';
 import 'package:tutor_app/data/repositories/auth_repository.dart';
@@ -28,6 +29,20 @@ class AppAuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // 🔹 Hàm điều hướng về Login khi chưa đăng nhập
+  void _navigateToLogin() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = navigatorKey.currentContext;
+      if (ctx == null) return;
+
+      Navigator.pushNamedAndRemoveUntil(
+        ctx,
+        AppRouter.login,
+            (route) => false,
+      );
+    });
+  }
+
   // 🔹 Lắng nghe trạng thái đăng nhập Firebase + user Firestore
   void bootstrap() {
     // tránh subscribe nhiều lần
@@ -38,8 +53,12 @@ class AppAuthProvider extends ChangeNotifier {
       _userSub?.cancel();
 
       if (fbUser == null) {
+        //  CHỖ NÀY TRƯỚC CHỈ clear user rồi return, KHÔNG NAVIGATE
         _user = null;
         notifyListeners();
+
+        // 🔁 Luôn đưa về màn Login khi không còn user (mới mở app / logout)
+        _navigateToLogin();
         return;
       }
 
@@ -118,16 +137,16 @@ class AppAuthProvider extends ChangeNotifier {
       }
       _user = user;
       notifyListeners();
-      // điều hướng vẫn do bootstrap() xử lý
+      // điều hướng vẫn do bootstrap() xử lý (authChanges -> _navigateAfterLogin)
     } catch (e) {
       debugPrint("Login error: $e");
-      rethrow; // để UI tự xử lý lỗi và show SnackBar
+      rethrow;
     } finally {
       _setLoading(false);
     }
   }
 
-  // 🔹 Đăng nhập bằng Google (giữ nguyên, vẫn dùng context để SnackBar)
+  // 🔹 Đăng nhập bằng Google
   Future<void> loginWithGoogle(BuildContext context) async {
     _setLoading(true);
     try {
@@ -147,7 +166,7 @@ class AppAuthProvider extends ChangeNotifier {
     }
   }
 
-  // 🔹 Đăng ký tài khoản → không tự SnackBar, không tự điều hướng
+  // 🔹 Đăng ký tài khoản
   Future<void> register(String email, String password) async {
     _setLoading(true);
     _justRegistered = true;
@@ -161,7 +180,7 @@ class AppAuthProvider extends ChangeNotifier {
       _user = null;
     } catch (e) {
       debugPrint("Register error: $e");
-      rethrow; // UI sẽ bắt để show message đẹp
+      rethrow;
     } finally {
       _setLoading(false);
       _justRegistered = false;
@@ -170,10 +189,9 @@ class AppAuthProvider extends ChangeNotifier {
 
   // 🔹 Đăng xuất
   Future<void> logout() async {
-    _user = null;
-    notifyListeners();
-
     try {
+      // 👉 Không tự điều hướng / không tự clear user ở đây
+      // Vì authChanges (fbUser == null) sẽ lo điều hướng + clear user
       await _repo.logout();
     } catch (e) {
       debugPrint('Logout error: $e');
@@ -233,6 +251,56 @@ class AppAuthProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint("Update profile error: $e");
       rethrow;
+    }
+  }
+
+  // 🔹 Đổi mật khẩu
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    if (_user == null) {
+      throw Exception('Bạn chưa đăng nhập');
+    }
+
+    _setLoading(true);
+    try {
+      final fb = FirebaseAuth.instance;
+      final fbUser = fb.currentUser;
+
+      if (fbUser == null || fbUser.email == null) {
+        throw Exception('Không tìm thấy tài khoản hiện tại');
+      }
+
+      // Nếu đăng nhập bằng Google thì không có password để đổi
+      final isPasswordProvider = fbUser.providerData.any(
+            (p) => p.providerId == 'password',
+      );
+      if (!isPasswordProvider) {
+        throw FirebaseAuthException(
+          code: 'provider-not-password',
+          message:
+          'Tài khoản đăng nhập bằng Google, không thể đổi mật khẩu trong ứng dụng.',
+        );
+      }
+
+      // 1. Re-authenticate bằng mật khẩu hiện tại
+      final cred = EmailAuthProvider.credential(
+        email: fbUser.email!,
+        password: currentPassword,
+      );
+      await fbUser.reauthenticateWithCredential(cred);
+
+      // 2. Cập nhật mật khẩu mới
+      await fbUser.updatePassword(newPassword);
+    } on FirebaseAuthException catch (e) {
+      debugPrint('changePassword Firebase error: $e');
+      rethrow;
+    } catch (e) {
+      debugPrint('changePassword error: $e');
+      rethrow;
+    } finally {
+      _setLoading(false);
     }
   }
 }
