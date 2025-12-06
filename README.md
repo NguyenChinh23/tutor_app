@@ -115,4 +115,7 @@ Provider (quản lý trạng thái MVVM)
 
 Intl — định dạng thời gian
 
-Base64 avatar cho thông báo (không dùng Firebase Storage trong module thông báo)
+Base64 avatar cho thông báo 
+
+## Một số giao diện 
+![image alt](https://github.com/NguyenChinh23/tutor_app/blob/5d885b1307078b3709ff170afe237915205c5ef8/Screenshot%202025-12-06%20130818.png)
