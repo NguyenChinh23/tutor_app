@@ -3,9 +3,8 @@
 Ứng dụng Tìm kiếm Gia sư cho Học viên là một ứng dụng di động được phát triển bằng Flutter, hỗ trợ học viên dễ dàng tìm gia sư phù hợp, đặt lịch học và theo dõi tiến trình học tập.
 Ứng dụng hỗ trợ hai hình thức học: online và offline, phù hợp với mọi nhu cầu cá nhân.
 
-Các tính năng chính:
- Tính năng chính
- Dành cho Học viên
+##Các tính năng chính:
+ ###Dành cho Học viên
 1. Quản lý tài khoản
 
 Đăng ký / đăng nhập bằng email.
@@ -48,7 +47,7 @@ Cập nhật trạng thái đặt lịch, đánh giá, thông tin buổi học.
 
 Thông báo hoạt động nhờ Firestore Realtime Stream (không sử dụng FCM).
 
- Dành cho Gia sư
+ ###Dành cho Gia sư
 1. Gửi hồ sơ đăng ký
 
 Điền thông tin giảng dạy, môn học, mức giá, kinh nghiệm.
@@ -71,7 +70,7 @@ Xem lịch sử buổi dạy và đánh giá học viên.
 
 Theo dõi phản hồi để cải thiện kỹ năng giảng dạy.
 
- Dành cho Quản trị viên
+ ###Dành cho Quản trị viên
 1. Quản lý hồ sơ gia sư
 
 Xét duyệt / từ chối hồ sơ trở thành gia sư.
