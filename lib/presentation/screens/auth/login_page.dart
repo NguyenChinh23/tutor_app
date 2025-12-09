@@ -43,8 +43,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   shape: BoxShape.circle,
                   color: Colors.indigo.shade50,
                 ),
-                child:
-                const Icon(Icons.school, size: 80, color: Colors.indigo),
+                child: const Icon(Icons.school, size: 80, color: Colors.indigo),
               ),
               const SizedBox(height: 18),
               const Text(
@@ -75,6 +74,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
               // Password
               TextField(
+                key: ValueKey(passwordController.text), // ✅ ép rebuild khi clear
                 controller: passwordController,
                 obscureText: _obscure,
                 decoration: InputDecoration(
@@ -136,16 +136,12 @@ class _LoginScreenState extends State<LoginScreen> {
                       return;
                     }
                     if (pass.length < 6) {
-                      _showSnack(
-                          "Mật khẩu phải có ít nhất 8 ký tự");
-                      // vẫn cho phép đăng nhập vì có thể tài khoản cũ dùng mk ngắn
+                      _showSnack("Mật khẩu phải có ít nhất 8 ký tự");
                     }
 
                     try {
-                      // clear session cũ
-                      await FirebaseAuth.instance.signOut();
                       await auth.login(email, pass);
-                      // thành công -> bootstrap sẽ tự điều hướng
+                      // Thành công -> bootstrap tự điều hướng
                     } on FirebaseAuthException catch (e) {
                       if (e.code == 'user-not-found') {
                         _showSnack("Tài khoản không tồn tại!");
@@ -160,9 +156,16 @@ class _LoginScreenState extends State<LoginScreen> {
                       } else {
                         _showSnack("Lỗi đăng nhập: ${e.message}");
                       }
+
+                      // ❗ Reset mật khẩu (ép rebuild thật)
+                      setState(() {
+                        passwordController.text = '';
+                      });
                     } catch (e) {
-                      _showSnack(
-                          "Đăng nhập thất bại. Vui lòng thử lại sau!");
+                      _showSnack("Đăng nhập thất bại. Vui lòng thử lại sau!");
+                      setState(() {
+                        passwordController.text = '';
+                      });
                     }
                   },
                   child: auth.isLoading
@@ -182,7 +185,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const Text("hoặc", style: TextStyle(color: Colors.grey)),
               const SizedBox(height: 22),
 
-              // Nút Google (giữ nguyên)
+              // Nút Google
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton(
