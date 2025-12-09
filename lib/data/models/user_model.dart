@@ -3,21 +3,20 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class UserModel {
   final String uid;
   final String email;
-  final String role; // 'student' | 'tutor' | 'admin'
+  final String role; // student | tutor | admin
   final bool isTutorVerified;
+  final bool isBlocked;
 
   final String? displayName;
   final String? avatarUrl;
   final String? goal;
 
-  // field dành cho tutor
   final String? subject;
   final String? bio;
   final double? price;
   final String? experience;
-  final String? availabilityNote; // lịch rảnh dạng text
+  final String? availabilityNote;
 
-  // ⭐ rating tổng quát của tutor
   final double? rating;
   final int? ratingCount;
 
@@ -26,6 +25,7 @@ class UserModel {
     required this.email,
     required this.role,
     this.isTutorVerified = false,
+    this.isBlocked = false,
     this.displayName,
     this.avatarUrl,
     this.goal,
@@ -41,15 +41,14 @@ class UserModel {
   factory UserModel.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data() ?? {};
 
-    double? _toDouble(dynamic v) {
+    double? toDouble(v) {
       if (v == null) return null;
-      if (v is int) return v.toDouble();
       if (v is num) return v.toDouble();
       if (v is String) return double.tryParse(v);
       return null;
     }
 
-    int? _toInt(dynamic v) {
+    int? toInt(v) {
       if (v == null) return null;
       if (v is int) return v;
       if (v is num) return v.toInt();
@@ -62,36 +61,36 @@ class UserModel {
       email: (data['email'] ?? '').toString(),
       role: (data['role'] ?? 'student').toString(),
       isTutorVerified: data['isTutorVerified'] == true,
+      isBlocked: data['isBlocked'] == true,
       displayName: data['displayName']?.toString(),
       avatarUrl: data['avatarUrl']?.toString(),
       goal: data['goal']?.toString(),
       subject: data['subject']?.toString(),
       bio: data['bio']?.toString(),
-      price: _toDouble(data['price']),
+      price: toDouble(data['price']),
       experience: data['experience']?.toString(),
       availabilityNote: data['availabilityNote']?.toString(),
-      rating: _toDouble(data['rating']),
-      ratingCount: _toInt(data['ratingCount']),
+      rating: toDouble(data['rating']),
+      ratingCount: toInt(data['ratingCount']),
     );
   }
 
-  Map<String, dynamic> toMap() {
-    return {
-      'email': email,
-      'role': role,
-      'isTutorVerified': isTutorVerified,
-      'displayName': displayName,
-      'avatarUrl': avatarUrl,
-      'goal': goal,
-      'subject': subject,
-      'bio': bio,
-      'price': price,
-      'experience': experience,
-      'availabilityNote': availabilityNote,
-      'rating': rating,
-      'ratingCount': ratingCount,
-    };
-  }
+  Map<String, dynamic> toMap() => {
+    'email': email,
+    'role': role,
+    'isTutorVerified': isTutorVerified,
+    'isBlocked': isBlocked,
+    'displayName': displayName,
+    'avatarUrl': avatarUrl,
+    'goal': goal,
+    'subject': subject,
+    'bio': bio,
+    'price': price,
+    'experience': experience,
+    'availabilityNote': availabilityNote,
+    'rating': rating,
+    'ratingCount': ratingCount,
+  };
 
   UserModel copyWith({
     String? displayName,
@@ -102,6 +101,7 @@ class UserModel {
     double? price,
     String? experience,
     bool? isTutorVerified,
+    bool? isBlocked,
     String? availabilityNote,
     double? rating,
     int? ratingCount,
@@ -111,6 +111,7 @@ class UserModel {
       email: email,
       role: role,
       isTutorVerified: isTutorVerified ?? this.isTutorVerified,
+      isBlocked: isBlocked ?? this.isBlocked,
       displayName: displayName ?? this.displayName,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       goal: goal ?? this.goal,

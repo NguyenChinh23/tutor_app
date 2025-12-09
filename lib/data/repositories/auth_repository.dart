@@ -1,6 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-
 import 'package:tutor_app/data/models/user_model.dart';
 import 'package:tutor_app/data/services/auth_service.dart';
 
@@ -8,10 +7,8 @@ class AuthRepository {
   final _fs = FirebaseFirestore.instance;
   final _auth = AuthService();
 
-  CollectionReference<Map<String, dynamic>> get _users =>
-      _fs.collection('users');
-  CollectionReference<Map<String, dynamic>> get _tutorApps =>
-      _fs.collection('tutorApplications');
+  CollectionReference<Map<String, dynamic>> get _users => _fs.collection('users');
+  CollectionReference<Map<String, dynamic>> get _tutorApps => _fs.collection('tutorApplications');
 
   // 🔹 Đăng ký email → mặc định role student
   Future<UserModel?> register(String email, String password) async {
@@ -35,6 +32,19 @@ class AuthRepository {
   Future<UserModel?> login(String email, String password) async {
     final user = await _auth.signIn(email, password);
     if (user == null) return null;
+
+    final userDoc = await _users.doc(user.uid).get();
+    if (userDoc.exists) {
+      final data = userDoc.data()!;
+      if (data['isBlocked'] == true) {
+        await _auth.signOut();
+        throw FirebaseAuthException(
+          code: 'user-blocked',
+          message: 'Tài khoản của bạn đã bị khóa bởi quản trị viên.',
+        );
+      }
+    }
+
     return _fetchOrCreateStudent(user);
   }
 
@@ -42,10 +52,24 @@ class AuthRepository {
   Future<UserModel?> loginWithGoogle() async {
     final user = await _auth.signInWithGoogle();
     if (user == null) return null;
+
+    final userDoc = await _users.doc(user.uid).get();
+    if (userDoc.exists) {
+      final data = userDoc.data()!;
+      // ✅ Kiểm tra tài khoản bị khóa
+      if (data['isBlocked'] == true) {
+        await _auth.signOut();
+        throw FirebaseAuthException(
+          code: 'user-blocked',
+          message: 'Tài khoản của bạn đã bị khóa bởi quản trị viên.',
+        );
+      }
+    }
+
     return _fetchOrCreateStudent(user);
   }
 
-  // 🔹 Reset password (dùng logic trong AuthService: check method password)
+  // 🔹 Reset password (dùng logic trong AuthService)
   Future<void> resetPassword(String email) async {
     await _auth.resetPassword(email);
   }
@@ -60,10 +84,7 @@ class AuthRepository {
     });
   }
 
-  // ===============================
-  //  APPLY → APPROVE / REJECT TUTOR
-  // ===============================
-
+  // 🔹 APPLY → APPROVE / REJECT TUTOR
   Future<void> applyTutor({
     required String uid,
     required String email,
@@ -147,10 +168,7 @@ class AuthRepository {
     });
   }
 
-  // ====================================================
-  //  TẠO HOẶC LẤY USER (login lần đầu)
-  // ====================================================
-
+  // 🔹 TẠO HOẶC LẤY USER (login lần đầu)
   Future<UserModel?> _fetchOrCreateStudent(User user) async {
     final doc = await _users.doc(user.uid).get();
     if (doc.exists) return UserModel.fromDoc(doc);

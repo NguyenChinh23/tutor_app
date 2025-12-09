@@ -1,27 +1,22 @@
-// lib/presentation/provider/auth_provider.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:tutor_app/data/models/user_model.dart';
 import 'package:tutor_app/data/repositories/auth_repository.dart';
 import 'package:tutor_app/config/app_router.dart';
 
-// 🌍 Biến global Navigator
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 class AppAuthProvider extends ChangeNotifier {
   final _repo = AuthRepository();
-
   UserModel? _user;
   UserModel? get user => _user;
 
   bool _loading = false;
   bool get isLoading => _loading;
 
-  bool _justRegistered = false; // tránh redirect sau khi đăng ký
-
-  StreamSubscription? _authSub;
+  StreamSubscription<User?>? _authSub;
   StreamSubscription<UserModel?>? _userSub;
 
   void _setLoading(bool v) {
@@ -29,52 +24,27 @@ class AppAuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // 🔹 Hàm điều hướng về Login khi chưa đăng nhập
-  void _navigateToLogin() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final ctx = navigatorKey.currentContext;
-      if (ctx == null) return;
-
-      Navigator.pushNamedAndRemoveUntil(
-        ctx,
-        AppRouter.login,
-            (route) => false,
-      );
-    });
-  }
-
-  // 🔹 Lắng nghe trạng thái đăng nhập Firebase + user Firestore
+  // Bootstrap listener
   void bootstrap() {
-    // tránh subscribe nhiều lần
     _authSub?.cancel();
-
     _authSub = _repo.authChanges.listen((fbUser) {
-      // mỗi lần user auth thay đổi -> hủy stream cũ
       _userSub?.cancel();
-
       if (fbUser == null) {
-        //  CHỖ NÀY TRƯỚC CHỈ clear user rồi return, KHÔNG NAVIGATE
         _user = null;
         notifyListeners();
-
-        // 🔁 Luôn đưa về màn Login khi không còn user (mới mở app / logout)
         _navigateToLogin();
         return;
       }
-
-      // 🔹 Lắng nghe thông tin user realtime từ Firestore
-      _userSub = _repo.userDocStream(fbUser.uid).listen((u) {
+      _userSub = _repo.userDocStream(fbUser.uid).listen((u) async {
         _user = u;
         notifyListeners();
-
-        if (u != null && !_justRegistered) {
-          _navigateAfterLogin(u);
-        }
-      }, onError: (e) {
-        debugPrint("userDocStream error: $e");
+        if (u == null) return;
+        final ctx = navigatorKey.currentContext;
+        if (ctx == null) return;
+        final current = ModalRoute.of(ctx)?.settings.name ?? AppRouter.splash;
+        if (u.isBlocked) await _handleBlockedUser();
+        else if (current == AppRouter.login || current == AppRouter.splash) _navigateAfterLogin(u);
       });
-    }, onError: (e) {
-      debugPrint("authChanges error: $e");
     });
   }
 
@@ -85,133 +55,148 @@ class AppAuthProvider extends ChangeNotifier {
     super.dispose();
   }
 
-  // 🔹 Điều hướng theo vai trò
+  void _safeNavigate(BuildContext ctx, String route) {
+    try {
+      Navigator.pushNamedAndRemoveUntil(ctx, route, (_) => false);
+    } catch (_) {}
+  }
+
+  void _navigateToLogin() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = navigatorKey.currentContext;
+      if (ctx == null) return;
+      final current = ModalRoute.of(ctx)?.settings.name;
+      if (current == AppRouter.login) return;
+      _safeNavigate(ctx, AppRouter.login);
+    });
+  }
+
   void _navigateAfterLogin(UserModel u) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final ctx = navigatorKey.currentContext;
       if (ctx == null) return;
-
       final role = u.role.trim().toLowerCase();
-
-      debugPrint(
-        '🔐 NAVIGATE: uid=${u.uid}, email=${u.email}, role=$role, isTutorVerified=${u.isTutorVerified}',
-      );
-
-      if (role == 'admin') {
-        Navigator.pushNamedAndRemoveUntil(
-          ctx,
-          AppRouter.admin,
-              (route) => false,
-        );
-      } else if (role == 'tutor') {
-        if (u.isTutorVerified == true) {
-          Navigator.pushNamedAndRemoveUntil(
-            ctx,
-            AppRouter.tutorHome,
-                (route) => false,
-          );
-        } else {
-          Navigator.pushNamedAndRemoveUntil(
-            ctx,
-            AppRouter.studentHome,
-                (route) => false,
-          );
-        }
-      } else {
-        Navigator.pushNamedAndRemoveUntil(
-          ctx,
-          AppRouter.studentHome,
-              (route) => false,
-        );
-      }
+      final target = (role == 'tutor' && u.isTutorVerified)
+          ? AppRouter.tutorHome
+          : AppRouter.studentHome;
+      final current = ModalRoute.of(ctx)?.settings.name;
+      if (current != target) _safeNavigate(ctx, target);
     });
   }
 
-  // 🔹 Đăng nhập Email & Password
+  Future<void> _handleBlockedUser() async {
+    if (_loading) return;
+    _setLoading(true);
+    final ctx = navigatorKey.currentContext;
+    if (ctx != null) {
+      ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
+        backgroundColor: Colors.red,
+        content: Text('❌ Tài khoản của bạn đã bị khóa.'),
+      ));
+    }
+    await _repo.logout();
+    _setLoading(false);
+    _navigateToLogin();
+  }
+
+  // Login email
   Future<void> login(String email, String password) async {
     _setLoading(true);
     try {
+      final fb = FirebaseAuth.instance;
+      if (fb.currentUser != null) await fb.signOut();
       final user = await _repo.login(email, password);
-      if (user == null) {
-        throw Exception("Không thể đăng nhập");
+      if (user == null) throw Exception("Không thể đăng nhập");
+      if (user.isBlocked) await _handleBlockedUser();
+      else {
+        _user = user;
+        notifyListeners();
+        _navigateAfterLogin(user);
       }
-      _user = user;
-      notifyListeners();
-      // điều hướng vẫn do bootstrap() xử lý (authChanges -> _navigateAfterLogin)
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'user-not-found') _showError('Tài khoản không tồn tại.');
+      else if (e.code == 'wrong-password' || e.code == 'invalid-credential')
+        _showError('Tài khoản hoặc mật khẩu không đúng.');
+      else if (e.code == 'too-many-requests')
+        _showError('Đăng nhập thất bại nhiều lần, thử lại sau.');
+      else _showError('Lỗi đăng nhập: ${e.message}');
     } catch (e) {
-      debugPrint("Login error: $e");
-      rethrow;
+      _showError('Đăng nhập thất bại: $e');
     } finally {
       _setLoading(false);
     }
   }
 
-  // 🔹 Đăng nhập bằng Google
+  // Login Google
   Future<void> loginWithGoogle(BuildContext context) async {
     _setLoading(true);
     try {
-      final user = await _repo.loginWithGoogle();
-      if (user == null) throw Exception("Đăng nhập Google thất bại");
-
-      _user = user;
+      final u = await _repo.loginWithGoogle();
+      if (u == null) throw Exception("Đăng nhập Google thất bại");
+      if (u.isBlocked) {
+        await _repo.logout();
+        _user = null;
+        notifyListeners();
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('❌ Tài khoản của bạn đã bị khóa.'),
+        ));
+        return;
+      }
+      _user = u;
       notifyListeners();
-      // Điều hướng vẫn do bootstrap xử lý
+      _navigateAfterLogin(u);
     } catch (e) {
-      debugPrint("Google login error: $e");
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Lỗi đăng nhập Google: $e')));
+      _showError('Lỗi đăng nhập Google: $e');
     } finally {
       _setLoading(false);
     }
   }
 
-  // 🔹 Đăng ký tài khoản
+  // Register
   Future<void> register(String email, String password) async {
     _setLoading(true);
-    _justRegistered = true;
     try {
-      final user = await _repo.register(email, password);
-      _user = user;
-      notifyListeners();
-
-      // Đăng xuất ngay sau khi tạo tài khoản để quay lại màn login
-      await _repo.logout();
-      _user = null;
+      await _repo.register(email, password);
+      _showSuccess('Đăng ký thành công! Vui lòng đăng nhập.');
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'email-already-in-use')
+        _showError('Email này đã được sử dụng.');
+      else if (e.code == 'invalid-email')
+        _showError('Email không hợp lệ.');
+      else
+        _showError('Lỗi đăng ký: ${e.message}');
     } catch (e) {
-      debugPrint("Register error: $e");
-      rethrow;
+      _showError('Lỗi đăng ký: $e');
     } finally {
       _setLoading(false);
-      _justRegistered = false;
     }
   }
 
-  // 🔹 Đăng xuất
-  Future<void> logout() async {
-    try {
-      // 👉 Không tự điều hướng / không tự clear user ở đây
-      // Vì authChanges (fbUser == null) sẽ lo điều hướng + clear user
-      await _repo.logout();
-    } catch (e) {
-      debugPrint('Logout error: $e');
-    }
-  }
-
-  // 🔹 Quên mật khẩu
+  // Reset password
   Future<void> resetPassword(String email) async {
     _setLoading(true);
     try {
       await _repo.resetPassword(email);
+      _showSuccess('Email khôi phục mật khẩu đã được gửi.');
     } catch (e) {
-      debugPrint('Reset password error: $e');
-      rethrow;
+      _showError('Lỗi gửi email khôi phục: $e');
     } finally {
       _setLoading(false);
     }
   }
 
-  // 🔹 Cập nhật hồ sơ
+  // Logout
+  Future<void> logout() async {
+    try {
+      await _repo.logout();
+      _navigateToLogin();
+    } catch (e) {
+      _showError('Lỗi khi đăng xuất: $e');
+    }
+  }
+
+  // Update profile
   Future<void> updateProfile(
       String name,
       String goal, {
@@ -224,6 +209,8 @@ class AppAuthProvider extends ChangeNotifier {
       }) async {
     if (_user == null) return;
     try {
+      await _userSub?.cancel();
+      _userSub = null;
       await _repo.updateUserProfile(
         _user!.uid,
         name,
@@ -235,7 +222,6 @@ class AppAuthProvider extends ChangeNotifier {
         experience: experience,
         availabilityNote: availabilityNote,
       );
-
       _user = _user!.copyWith(
         displayName: name,
         goal: goal,
@@ -246,61 +232,77 @@ class AppAuthProvider extends ChangeNotifier {
         experience: experience ?? _user!.experience,
         availabilityNote: availabilityNote ?? _user!.availabilityNote,
       );
-
       notifyListeners();
+      _userSub = _repo.userDocStream(_user!.uid).listen((u) {
+        _user = u;
+        notifyListeners();
+      });
+      _showSuccess('Cập nhật hồ sơ thành công.');
     } catch (e) {
-      debugPrint("Update profile error: $e");
-      rethrow;
+      _showError('Lỗi khi cập nhật hồ sơ: $e');
     }
   }
 
-  // 🔹 Đổi mật khẩu
+  // Change password
   Future<void> changePassword({
     required String currentPassword,
     required String newPassword,
   }) async {
-    if (_user == null) {
-      throw Exception('Bạn chưa đăng nhập');
-    }
-
+    if (_user == null) throw Exception('Bạn chưa đăng nhập');
     _setLoading(true);
     try {
-      final fb = FirebaseAuth.instance;
-      final fbUser = fb.currentUser;
-
-      if (fbUser == null || fbUser.email == null) {
-        throw Exception('Không tìm thấy tài khoản hiện tại');
-      }
-
-      // Nếu đăng nhập bằng Google thì không có password để đổi
-      final isPasswordProvider = fbUser.providerData.any(
-            (p) => p.providerId == 'password',
-      );
-      if (!isPasswordProvider) {
+      final fbUser = FirebaseAuth.instance.currentUser;
+      if (fbUser == null || fbUser.email == null)
+        throw Exception('Không tìm thấy tài khoản');
+      final isPassword =
+      fbUser.providerData.any((p) => p.providerId == 'password');
+      if (!isPassword) {
         throw FirebaseAuthException(
           code: 'provider-not-password',
-          message:
-          'Tài khoản đăng nhập bằng Google, không thể đổi mật khẩu trong ứng dụng.',
+          message: 'Không thể đổi mật khẩu cho tài khoản Google.',
         );
       }
-
-      // 1. Re-authenticate bằng mật khẩu hiện tại
       final cred = EmailAuthProvider.credential(
         email: fbUser.email!,
         password: currentPassword,
       );
       await fbUser.reauthenticateWithCredential(cred);
-
-      // 2. Cập nhật mật khẩu mới
       await fbUser.updatePassword(newPassword);
+      _showSuccess('Đổi mật khẩu thành công.');
     } on FirebaseAuthException catch (e) {
-      debugPrint('changePassword Firebase error: $e');
-      rethrow;
+      if (e.code == 'wrong-password')
+        _showError('Mật khẩu hiện tại không chính xác.');
+      else
+        _showError('Lỗi Firebase: ${e.message}');
     } catch (e) {
-      debugPrint('changePassword error: $e');
-      rethrow;
+      _showError('Lỗi khi đổi mật khẩu: $e');
     } finally {
       _setLoading(false);
     }
+  }
+
+  // Snackbar
+  void _showError(String msg) {
+    final ctx = navigatorKey.currentContext;
+    if (ctx == null) return;
+    ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+      backgroundColor: Colors.red,
+      behavior: SnackBarBehavior.floating,
+      margin: const EdgeInsets.all(12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      content: Text(msg, textAlign: TextAlign.center),
+    ));
+  }
+
+  void _showSuccess(String msg) {
+    final ctx = navigatorKey.currentContext;
+    if (ctx == null) return;
+    ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+      backgroundColor: Colors.green,
+      behavior: SnackBarBehavior.floating,
+      margin: const EdgeInsets.all(12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      content: Text(msg, textAlign: TextAlign.center),
+    ));
   }
 }
