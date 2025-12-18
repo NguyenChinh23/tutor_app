@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import 'package:tutor_app/config/theme.dart';
 import 'package:tutor_app/data/models/tutor_model.dart';
+import 'package:tutor_app/presentation/provider/auth_provider.dart';
 
 final _currencyFmt = NumberFormat.currency(
   locale: 'vi_VN',
@@ -24,34 +26,29 @@ class TutorCard extends StatelessWidget {
     if (avatarUrl == null || avatarUrl.isEmpty) {
       return const AssetImage('assets/tutor1.png');
     }
-
     try {
       if (avatarUrl.startsWith('http')) {
         return NetworkImage(avatarUrl);
       } else {
-        final bytes = base64Decode(avatarUrl);
-        return MemoryImage(bytes);
+        return MemoryImage(base64Decode(avatarUrl));
       }
-    } catch (e) {
-      debugPrint('Tutor avatar decode error: $e');
+    } catch (_) {
       return const AssetImage('assets/tutor1.png');
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.read<AppAuthProvider>();
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black12.withOpacity(0.05),
-            blurRadius: 5,
-            offset: const Offset(0, 2),
-          ),
+        boxShadow: const [
+          BoxShadow(color: Colors.black12, blurRadius: 4),
         ],
       ),
       child: Row(
@@ -62,13 +59,10 @@ class TutorCard extends StatelessWidget {
           ),
           const SizedBox(width: 12),
 
-          //       THÔNG TIN GIA SƯ
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-
-                // Tên gia sư
                 Text(
                   tutor.name,
                   maxLines: 1,
@@ -78,10 +72,7 @@ class TutorCard extends StatelessWidget {
                     fontSize: 16,
                   ),
                 ),
-
                 const SizedBox(height: 4),
-
-                // Môn dạy
                 Text(
                   tutor.subject,
                   style: const TextStyle(
@@ -89,22 +80,13 @@ class TutorCard extends StatelessWidget {
                     color: Colors.black54,
                   ),
                 ),
-
                 const SizedBox(height: 6),
-
-                // ⭐ Rating + Giá
                 Row(
                   children: [
                     const Icon(Icons.star,
                         size: 16, color: Colors.amber),
                     const SizedBox(width: 4),
-                    Text(
-                      tutor.rating.toStringAsFixed(1),
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
+                    Text(tutor.rating.toStringAsFixed(1)),
                     const SizedBox(width: 12),
                     Text(
                       '${_currencyFmt.format(tutor.price)}/h',
@@ -116,44 +98,35 @@ class TutorCard extends StatelessWidget {
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 6),
-
-                // 🔥 Dòng mới: Số buổi dạy & Số học viên
                 Row(
                   children: [
-                    Icon(Icons.menu_book, size: 14, color: Colors.blue[700]),
+                    const Icon(Icons.menu_book, size: 14),
                     const SizedBox(width: 4),
-                    Text(
-                      '${tutor.totalLessons} buổi',
-                      style: const TextStyle(fontSize: 12, color: Colors.black87),
-                    ),
+                    Text('${tutor.totalLessons} buổi'),
                     const SizedBox(width: 12),
-                    Icon(Icons.people, size: 14, color: Colors.deepPurple),
+                    const Icon(Icons.people, size: 14),
                     const SizedBox(width: 4),
-                    Text(
-                      '${tutor.totalStudents} học viên',
-                      style: const TextStyle(fontSize: 12, color: Colors.black87),
-                    ),
+                    Text('${tutor.totalStudents} học viên'),
                   ],
                 ),
               ],
             ),
           ),
 
-          const SizedBox(width: 10),
-
-          //   Nút BOOK
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.primaryColor,
-              padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
-            onPressed: onBook,
+            onPressed: () {
+              final ok = auth.requireLogin(context);
+              if (!ok) return;
+
+              onBook?.call();
+            },
             child: const Text(
               'Book',
               style: TextStyle(

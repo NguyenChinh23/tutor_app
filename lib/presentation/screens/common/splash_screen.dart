@@ -19,7 +19,6 @@ class _SplashScreenState extends State<SplashScreen>
   void initState() {
     super.initState();
 
-    // Animation cho logo (phóng to dần)
     _logoController =
         AnimationController(vsync: this, duration: const Duration(seconds: 2));
 
@@ -36,10 +35,13 @@ class _SplashScreenState extends State<SplashScreen>
 
     _logoController.forward();
 
-    // Sau 3 giây → sang trang login
+    /// ✅ SAU SPLASH → HOME (GUEST)
     Timer(const Duration(seconds: 3), () {
       if (mounted) {
-        Navigator.pushReplacementNamed(context, AppRouter.login);
+        Navigator.pushReplacementNamed(
+          context,
+          AppRouter.studentHome,
+        );
       }
     });
   }
@@ -59,7 +61,6 @@ class _SplashScreenState extends State<SplashScreen>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // 🔹 Logo animation
               ScaleTransition(
                 scale: _logoScale,
                 child: Image.asset(
@@ -68,8 +69,6 @@ class _SplashScreenState extends State<SplashScreen>
                 ),
               ),
               const SizedBox(height: 24),
-
-              // 🔹 Text animation
               SlideTransition(
                 position: _textSlide,
                 child: const Column(
@@ -80,7 +79,6 @@ class _SplashScreenState extends State<SplashScreen>
                         color: Colors.white,
                         fontSize: 32,
                         fontWeight: FontWeight.bold,
-                        letterSpacing: 1.2,
                       ),
                     ),
                     SizedBox(height: 8),

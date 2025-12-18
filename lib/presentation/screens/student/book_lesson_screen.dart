@@ -139,18 +139,10 @@ class _BookLessonScreenState extends State<BookLessonScreen> {
   Future<void> _submit() async {
     final auth = context.read<AppAuthProvider>();
     final bookingProvider = context.read<BookingProvider>();
-    final student = auth.user;
-
-    if (student == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng đăng nhập để đặt lịch.')),
-      );
-      return;
-    }
+    final student = auth.user!; // 💥 CHẮC CHẮN ĐÃ LOGIN
 
     final tutor = widget.tutor;
 
-    // Gói tháng thì bắt buộc chọn ít nhất 1 ngày trong tuần
     if (_packageType != 'single' && _selectedWeekdays.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -166,12 +158,7 @@ class _BookLessonScreenState extends State<BookLessonScreen> {
       final startAt = _combine(_selectedDate, _start);
       final endAt = startAt.add(Duration(minutes: _durationMinutes));
 
-      if (!endAt.isAfter(startAt)) {
-        throw Exception('Thời lượng không hợp lệ');
-      }
-
       if (_packageType == 'single') {
-        // 🔹 1 BUỔI LẺ
         await bookingProvider.createSingleBooking(
           tutorId: tutor.uid,
           tutorName: tutor.name,
@@ -186,7 +173,6 @@ class _BookLessonScreenState extends State<BookLessonScreen> {
           mode: _mode,
         );
       } else {
-        // 🔹 GÓI NHIỀU BUỔI – BookingProvider tự tạo packageId
         await bookingProvider.createPackageBookings(
           tutorId: tutor.uid,
           tutorName: tutor.name,
@@ -207,24 +193,14 @@ class _BookLessonScreenState extends State<BookLessonScreen> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            _packageType == 'single'
-                ? 'Đã gửi yêu cầu. Chờ gia sư xác nhận.'
-                : 'Đã tạo yêu cầu gói học. Chờ gia sư xác nhận.',
-          ),
-        ),
+        const SnackBar(content: Text('Đã gửi yêu cầu đặt lịch.')),
       );
       Navigator.pop(context);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Lỗi khi tạo booking: $e')),
-      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
+
 
   Widget _weekdayChip(String label, int weekday) {
     final isSelected = _selectedWeekdays.contains(weekday);

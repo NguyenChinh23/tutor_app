@@ -4,6 +4,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:tutor_app/config/theme.dart';
+import 'package:provider/provider.dart';
+import 'package:tutor_app/presentation/provider/auth_provider.dart';
+import 'package:tutor_app/config/app_router.dart';
 import 'package:tutor_app/data/models/tutor_model.dart';
 import 'package:tutor_app/presentation/screens/student/book_lesson_screen.dart';
 
@@ -62,6 +65,15 @@ class _TutorDetailScreenState extends State<TutorDetailScreen> {
   }
 
   void _openBookingScreen() {
+    final auth = context.read<AppAuthProvider>();
+
+    // 🔥 GUEST → LOGIN NGAY
+    if (auth.status == AuthStatus.guest) {
+      Navigator.pushNamed(context, AppRouter.login);
+      return;
+    }
+
+    // ĐÃ LOGIN → VÀO BOOK
     Navigator.push(
       context,
       MaterialPageRoute(
