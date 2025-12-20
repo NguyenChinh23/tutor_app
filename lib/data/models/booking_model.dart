@@ -1,9 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class BookingStatus {
-  static const String requested = 'requested';
   static const String accepted = 'accepted';
-  static const String rejected = 'rejected';
   static const String cancelled = 'cancelled';
   static const String completed = 'completed';
 }
@@ -26,28 +24,38 @@ class BookingModel {
   final DateTime startAt;
   final DateTime endAt;
 
+  /// accepted | cancelled | completed
   final String status;
 
   final bool paid;
   final String? paymentMethod;
-
   final String? cancelReason;
 
   final DateTime createdAt;
   final DateTime? updatedAt;
 
-  final String mode; // online / offline_at_student / offline_at_tutor
+  /// online | offline_at_student | offline_at_tutor
+  final String mode;
 
-  // Đánh giá
+  // ===== ĐÁNH GIÁ =====
   final double? rating;
   final String? review;
   final DateTime? ratedAt;
 
-  // Thông tin gói
-  final String? packageType;   // 'single' | '1m' | '3m' | '6m'
-  final String? packageId;     // id chung cho cả gói
-  final int? sessionIndex;     // buổi thứ mấy trong gói
-  final int? totalSessions;    // tổng số buổi trong gói
+  // ===== GÓI HỌC =====
+  /// single | 1m | 3m | 6m
+  final String packageType;
+
+  /// null nếu book lẻ
+  final String? packageId;
+
+  /// book lẻ = 1
+  final int totalSessions;
+
+  /// số buổi đã hoàn thành
+  final int completedSessions;
+
+  bool get isPackage => packageType != 'single';
 
   BookingModel({
     required this.id,
@@ -74,8 +82,8 @@ class BookingModel {
     required this.ratedAt,
     required this.packageType,
     required this.packageId,
-    required this.sessionIndex,
     required this.totalSessions,
+    required this.completedSessions,
   });
 
   factory BookingModel.fromDoc(
@@ -90,33 +98,33 @@ class BookingModel {
 
     return BookingModel(
       id: doc.id,
-      tutorId: (data['tutorId'] ?? '') as String,
-      studentId: (data['studentId'] ?? '') as String,
-      tutorName: (data['tutorName'] ?? '') as String,
-      studentName: (data['studentName'] ?? '') as String,
-      subject: (data['subject'] ?? '') as String,
+      tutorId: data['tutorId'] ?? '',
+      studentId: data['studentId'] ?? '',
+      tutorName: data['tutorName'] ?? '',
+      studentName: data['studentName'] ?? '',
+      subject: data['subject'] ?? '',
       pricePerHour: (data['pricePerHour'] as num?)?.toDouble() ?? 0,
       hours: (data['hours'] as num?)?.toDouble() ?? 0,
       price: (data['price'] as num?)?.toDouble() ?? 0,
-      note: (data['note'] ?? '') as String,
+      note: data['note'] ?? '',
       startAt: _toDate(data['startAt']),
       endAt: _toDate(data['endAt']),
-      status: (data['status'] ?? BookingStatus.requested) as String,
-      paid: (data['paid'] ?? false) as bool,
-      paymentMethod: data['paymentMethod'] as String?,
-      cancelReason: data['cancelReason'] as String?,
+      status: data['status'] ?? BookingStatus.accepted,
+      paid: data['paid'] ?? false,
+      paymentMethod: data['paymentMethod'],
+      cancelReason: data['cancelReason'],
       createdAt: _toDate(data['createdAt']),
       updatedAt:
       data['updatedAt'] == null ? null : _toDate(data['updatedAt']),
-      mode: (data['mode'] ?? 'online') as String,
+      mode: data['mode'] ?? 'online',
       rating: (data['rating'] as num?)?.toDouble(),
-      review: data['review'] as String?,
+      review: data['review'],
       ratedAt:
       data['ratedAt'] == null ? null : _toDate(data['ratedAt']),
-      packageType: data['packageType'] as String?,
-      packageId: data['packageId'] as String?,
-      sessionIndex: data['sessionIndex'] as int?,
-      totalSessions: data['totalSessions'] as int?,
+      packageType: data['packageType'] ?? 'single',
+      packageId: data['packageId'],
+      totalSessions: data['totalSessions'] ?? 1,
+      completedSessions: data['completedSessions'] ?? 0,
     );
   }
 
@@ -133,7 +141,7 @@ class BookingModel {
       'note': note,
       'startAt': Timestamp.fromDate(startAt),
       'endAt': Timestamp.fromDate(endAt),
-      'status': status,
+      'status': status, // luôn là accepted khi tạo
       'paid': paid,
       'paymentMethod': paymentMethod,
       'cancelReason': cancelReason,
@@ -146,8 +154,8 @@ class BookingModel {
       'ratedAt': ratedAt == null ? null : Timestamp.fromDate(ratedAt!),
       'packageType': packageType,
       'packageId': packageId,
-      'sessionIndex': sessionIndex,
       'totalSessions': totalSessions,
+      'completedSessions': completedSessions,
     };
   }
 }

@@ -10,209 +10,251 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase";
 
+/* =======================
+   STATUS NORMALIZE
+======================= */
+const normalizeStatus = (status) => {
+  if (!status) return "active";
+  if (status === "requested" || status === "accepted") return "active";
+  return status;
+};
+
+const STATUS_COLOR = {
+  active: "#1565c0",
+  completed: "#2e7d32",
+  cancelled: "#d32f2f",
+};
+
+/* =======================
+   TIME HELPERS
+======================= */
+const toDate = (ts) =>
+  ts?.toDate ? ts.toDate() : new Date(ts?.seconds * 1000);
+
+const calcEndTime = (startAt, hours) => {
+  if (!startAt || !hours) return null;
+  const start = toDate(startAt);
+  return new Date(start.getTime() + hours * 60 * 60 * 1000);
+};
+
+/* =======================
+   COMPONENT
+======================= */
 function BookingsPage() {
-  const [statusFilter, setStatusFilter] = useState("all");
   const [bookings, setBookings] = useState([]);
   const [usersMap, setUsersMap] = useState({});
   const [loading, setLoading] = useState(true);
 
-  // 🔹 Bộ lọc thời gian
+  const [statusFilter, setStatusFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  // 🔹 Lấy danh sách user 1 lần để map tên
+  /* ===== USERS MAP ===== */
   useEffect(() => {
     const fetchUsers = async () => {
       const snap = await getDocs(collection(db, "users"));
       const map = {};
-      snap.forEach((doc) => {
-        const d = doc.data();
-        map[doc.id] = d.displayName || d.email || "(Không rõ)";
+      snap.forEach((d) => {
+        const u = d.data();
+        map[d.id] = u.displayName || u.email || "(Không rõ)";
       });
       setUsersMap(map);
     };
     fetchUsers();
   }, []);
 
-  // 🔹 Lấy danh sách booking realtime
+  /* ===== BOOKINGS REALTIME ===== */
   useEffect(() => {
     const q = query(collection(db, "bookings"), orderBy("createdAt", "desc"));
     const unsub = onSnapshot(q, (snap) => {
-      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const list = snap.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+      }));
       setBookings(list);
       setLoading(false);
     });
     return () => unsub();
   }, []);
 
-  const normalize = (s = "") => s.toLowerCase().trim();
-
-  // 🔹 Lọc nâng cao (trạng thái + thời gian)
+  /* ===== FILTERED DATA ===== */
   const filteredBookings = useMemo(() => {
-    let list = bookings;
+    let list = bookings.map((b) => ({
+      ...b,
+      status: normalizeStatus(b.status),
+    }));
 
-    // 1️⃣ Lọc theo trạng thái
     if (statusFilter !== "all") {
-      list = list.filter((b) => {
-        const st = normalize(b.status);
-        if (statusFilter === "requested") return st.includes("requested") || st.includes("yêu cầu");
-        if (statusFilter === "accepted") return st.includes("accepted") || st.includes("chấp nhận");
-        if (statusFilter === "completed") return st.includes("completed") || st.includes("hoàn thành");
-        if (statusFilter === "canceled") return st.includes("hủy") || st.includes("cancel");
-        return true;
-      });
+      list = list.filter((b) => b.status === statusFilter);
     }
 
-    // 2️⃣ Lọc theo thời gian
     if (dateFrom || dateTo) {
       const from = dateFrom ? new Date(dateFrom) : new Date("2000-01-01");
-      const to = dateTo ? new Date(dateTo + "T23:59:59") : new Date("2100-01-01");
+      const to = dateTo
+        ? new Date(dateTo + "T23:59:59")
+        : new Date("2100-01-01");
 
       list = list.filter((b) => {
-        const start = b.startAt?.toDate ? b.startAt.toDate() : new Date(b.startAt?.seconds * 1000);
-        return start >= from && start <= to;
+        const d = toDate(b.startAt);
+        return d >= from && d <= to;
       });
     }
 
     return list;
   }, [bookings, statusFilter, dateFrom, dateTo]);
 
-  const formatTime = (ts) => {
-    if (!ts) return "N/A";
-    try {
-      const d = ts.toDate ? ts.toDate() : new Date(ts.seconds * 1000);
-      return d.toLocaleString("vi-VN");
-    } catch {
-      return "N/A";
-    }
-  };
-
-  // 🔹 Xóa booking
+  /* ===== DELETE ===== */
   const handleDelete = async (id) => {
-    if (!window.confirm("Bạn có chắc chắn muốn xóa booking này?")) return;
-    try {
-      await deleteDoc(doc(db, "bookings", id));
-      alert("Đã xóa thành công!");
-    } catch (err) {
-      console.error(err);
-      alert("Lỗi khi xóa booking.");
-    }
+    if (!window.confirm("Bạn có chắc muốn xóa booking này?")) return;
+    await deleteDoc(doc(db, "bookings", id));
+    alert("Đã xóa booking");
   };
 
   if (loading) return <p>Đang tải dữ liệu...</p>;
 
   return (
-    <div style={{ width: "100%", paddingBottom: 50 }}>
+    <div style={{ padding: 24 }}>
       <h2 style={{ marginBottom: 16 }}>📅 Quản lý Booking</h2>
 
-      {/* 🔹 Bộ lọc */}
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 12,
-          marginBottom: 20,
-          alignItems: "center",
-        }}
-      >
-        <label>Trạng thái: </label>
+      {/* ===== FILTER ===== */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          style={{ padding: "6px 10px", borderRadius: 6 }}
         >
           <option value="all">Tất cả</option>
-          <option value="requested">Đã yêu cầu</option>
-          <option value="accepted">Đã chấp nhận</option>
+          <option value="active">Đang học</option>
           <option value="completed">Hoàn thành</option>
-          <option value="canceled">Đã hủy</option>
+          <option value="cancelled">Đã hủy</option>
         </select>
 
-        <label>Từ ngày: </label>
         <input
           type="date"
           value={dateFrom}
           onChange={(e) => setDateFrom(e.target.value)}
-          style={{ padding: "6px 10px", borderRadius: 6 }}
         />
-        <label>Đến ngày: </label>
         <input
           type="date"
           value={dateTo}
           onChange={(e) => setDateTo(e.target.value)}
-          style={{ padding: "6px 10px", borderRadius: 6 }}
         />
       </div>
 
-      <p style={{ color: "#555", marginBottom: 12 }}>
-        Tổng số: <b>{filteredBookings.length}</b> kết quả
+      <p>
+        Tổng số: <b>{filteredBookings.length}</b> booking
       </p>
 
-      {filteredBookings.length === 0 && <p>Không có booking nào.</p>}
+      {/* ===== HEADER ===== */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns:
+            "1.2fr 1.2fr 2fr 0.8fr 1fr 1fr 1.4fr 0.8fr",
+          padding: "10px 12px",
+          fontWeight: 700,
+          background: "#f1f3f5",
+          borderRadius: 8,
+        }}
+      >
+        <div>Học viên</div>
+        <div>Gia sư</div>
+        <div>Thời gian</div>
+        <div>Thời lượng</div>
+        <div>Hình thức</div>
+        <div>Loại</div>
+        <div>Tiến độ / Giá</div>
+        <div>Trạng thái</div>
+      </div>
 
-      <div style={{ display: "grid", gap: 12 }}>
-        {filteredBookings.map((b) => (
-          <div
-            key={b.id}
-            style={{
-              background: "#fff",
-              borderRadius: 8,
-              padding: 16,
-              boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-              lineHeight: 1.6,
-            }}
-          >
-            <p>
-              <b>Học viên:</b> {usersMap[b.studentId] || b.studentName || b.studentId}
-            </p>
-            <p>
-              <b>Gia sư:</b> {usersMap[b.tutorId] || b.tutorName || b.tutorId}
-            </p>
-            <p>
-              <b>Thời gian:</b> {formatTime(b.startAt)} ({b.hours} giờ)
-            </p>
-            <p>
-              <b>Hình thức:</b> {b.mode}
-            </p>
-            <p>
-              <b>Giá:</b>{" "}
-              {b.price ? `${b.price.toLocaleString("vi-VN")} ₫` : "N/A"}
-            </p>
-            <p>
-              <b>Trạng thái:</b>{" "}
-              <span
-                style={{
-                  color:
-                    normalize(b.status) === "completed"
-                      ? "#2e7d32"
-                      : normalize(b.status) === "accepted"
-                      ? "#1565c0"
-                      : normalize(b.status).includes("hủy")
-                      ? "#d32f2f"
-                      : "#555",
-                  fontWeight: 600,
-                }}
-              >
-                {b.status}
-              </span>
-            </p>
+      {/* ===== ROWS ===== */}
+      <div
+        style={{
+          marginTop: 8,
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+        }}
+      >
+        {filteredBookings.map((b) => {
+          const isPackage = b.packageType && b.packageType !== "single";
+          const start = toDate(b.startAt);
+          const end = calcEndTime(b.startAt, b.hours);
 
-            <button
-              onClick={() => handleDelete(b.id)}
+          return (
+            <div
+              key={b.id}
               style={{
-                marginTop: 10,
-                padding: "6px 12px",
-                borderRadius: 6,
-                background: "#e53935",
-                color: "#fff",
-                border: "none",
-                cursor: "pointer",
+                display: "grid",
+                gridTemplateColumns:
+                  "1.2fr 1.2fr 2fr 0.8fr 1fr 1fr 1.4fr 0.8fr",
+                padding: "12px",
+                background: "#fff",
+                borderRadius: 8,
+                boxShadow: "0 2px 6px rgba(0,0,0,0.06)",
+                alignItems: "center",
               }}
             >
-              🗑️ Xóa booking
-            </button>
-          </div>
-        ))}
+              <div>{usersMap[b.studentId] || b.studentName}</div>
+              <div>{usersMap[b.tutorId] || b.tutorName}</div>
+
+              <div>
+                {start.toLocaleDateString("vi-VN")}{" "}
+                {start.toLocaleTimeString("vi-VN", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+                {end && (
+                  <>
+                    {" "}
+                    –{" "}
+                    {end.toLocaleTimeString("vi-VN", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </>
+                )}
+              </div>
+
+              <div>{b.hours} giờ</div>
+              <div>{b.mode}</div>
+              <div>{isPackage ? `Gói ${b.packageType}` : "Buổi lẻ"}</div>
+
+              <div>
+                {isPackage
+                  ? `${b.completedSessions || 0} / ${
+                      b.totalSessions || 0
+                    } buổi`
+                  : `${b.price?.toLocaleString("vi-VN")} ₫`}
+              </div>
+
+              <div>
+                <div
+                  style={{
+                    color: STATUS_COLOR[b.status],
+                    fontWeight: 600,
+                    marginBottom: 4,
+                  }}
+                >
+                  {b.status}
+                </div>
+                <button
+                  onClick={() => handleDelete(b.id)}
+                  style={{
+                    fontSize: 12,
+                    padding: "4px 8px",
+                    borderRadius: 6,
+                    background: "#e53935",
+                    color: "#fff",
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  🗑 Xóa
+                </button>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

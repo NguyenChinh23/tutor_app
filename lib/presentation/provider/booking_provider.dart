@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:tutor_app/data/models/booking_model.dart';
 import 'package:tutor_app/data/repositories/booking_repository.dart';
@@ -8,46 +9,75 @@ class BookingProvider extends ChangeNotifier {
   BookingProvider({BookingRepository? repository})
       : repository = repository ?? BookingRepository();
 
-  // ================== STATE ==================
+  // ================= LIST =================
   List<BookingModel> _studentBookings = [];
   List<BookingModel> get studentBookings => _studentBookings;
 
   List<BookingModel> _tutorBookings = [];
   List<BookingModel> get tutorBookings => _tutorBookings;
 
+  List<BookingModel> _adminBookings = [];
+  List<BookingModel> get adminBookings => _adminBookings;
+
+  // ================= LOADING =================
   bool _loadingStudent = false;
   bool get loadingStudent => _loadingStudent;
 
   bool _loadingTutor = false;
   bool get loadingTutor => _loadingTutor;
 
-  // ================== STREAM LISTENERS ==================
+  bool _loadingAdmin = false;
+  bool get loadingAdmin => _loadingAdmin;
+
+  // ================= STREAM =================
+  StreamSubscription<List<BookingModel>>? _studentSub;
+  StreamSubscription<List<BookingModel>>? _tutorSub;
+  StreamSubscription<List<BookingModel>>? _adminSub;
+
+  // ================= LISTEN =================
   void listenForStudent(String studentId) {
+    _studentSub?.cancel();
     _loadingStudent = true;
     notifyListeners();
 
     repository.streamForStudent(studentId).listen((list) {
-      _studentBookings = list;
+      _studentBookings = _filterValid(list);
       _loadingStudent = false;
       notifyListeners();
     });
   }
 
   void listenForTutor(String tutorId) {
+    _tutorSub?.cancel();
     _loadingTutor = true;
     notifyListeners();
 
     repository.streamForTutor(tutorId).listen((list) {
-      _tutorBookings = list;
+      _tutorBookings = _filterValid(list);
       _loadingTutor = false;
       notifyListeners();
     });
   }
 
-  // ================== TẠO BOOKING ==================
+  void listenForAdmin() {
+    _adminSub?.cancel();
+    _loadingAdmin = true;
+    notifyListeners();
 
-  /// Tạo 1 buổi lẻ
-  Future<void> createSingleBooking({
+    repository.streamAllBookings().listen((list) {
+      _adminBookings = _filterValid(list);
+      _loadingAdmin = false;
+      notifyListeners();
+    });
+  }
+
+  List<BookingModel> _filterValid(List<BookingModel> list) {
+    return list.where((b) => b.status != 'deleted_by_admin').toList();
+  }
+
+  // ================= CREATE =================
+  /// BOOK LẺ hoặc BOOK GÓI → AUTO ACCEPT
+  Future<void> createBooking({
     required String tutorId,
     required String tutorName,
     required String studentId,
@@ -59,10 +89,9 @@ class BookingProvider extends ChangeNotifier {
     required DateTime endAt,
     required String note,
     required String mode,
+    required String packageType, // single | 1m | 3m | 6m
+    required int totalSessions,
   }) async {
-    final now = DateTime.now();
-    final total = pricePerHour * hours;
-
     final booking = BookingModel(
       id: '',
       tutorId: tutorId,
@@ -72,197 +101,56 @@ class BookingProvider extends ChangeNotifier {
       subject: subject,
       pricePerHour: pricePerHour,
       hours: hours,
-      price: total,
+      price: pricePerHour * hours * totalSessions,
       note: note,
       startAt: startAt,
       endAt: endAt,
-      status: BookingStatus.requested,
+      status: BookingStatus.accepted, // ✅ AUTO NHẬN
       paid: false,
       paymentMethod: null,
       cancelReason: null,
-      createdAt: now,
+      createdAt: DateTime.now(),
       updatedAt: null,
       mode: mode,
       rating: null,
       review: null,
       ratedAt: null,
-      packageType: "single",
-      packageId: null,
-      sessionIndex: null,
-      totalSessions: null,
+      packageType: packageType,
+      packageId:
+      packageType == 'single' ? null : 'pkg_${DateTime.now().millisecondsSinceEpoch}',
+      totalSessions: totalSessions,
+      completedSessions: 0,
     );
 
     await repository.createBooking(booking);
   }
 
-  /// Tạo booking theo GÓI
-  Future<void> createPackageBookings({
-    required String tutorId,
-    required String tutorName,
-    required String studentId,
-    required String studentName,
-    required String subject,
-    required double pricePerHour,
-    required double hours,
-    required DateTime startDate,
-    required TimeOfDay timeStart,
-    required TimeOfDay timeEnd,
-    required String packageType, // '1m' | '3m' | '6m'
-    required List<int> weekdays,
-    String? packageId, // có thể truyền từ UI, nếu null sẽ tự sinh
-    required String note,
-    required String mode,
-  }) async {
-    // số tuần của gói
-    int weeks;
-    switch (packageType) {
-      case '1m':
-        weeks = 4;
-        break;
-      case '3m':
-        weeks = 12;
-        break;
-      case '6m':
-        weeks = 24;
-        break;
-      default:
-        return;
-    }
+  // ================= TUTOR =================
 
-    if (weekdays.isEmpty) return;
+  /// Gia sư hoàn thành 1 buổi (tăng tiến độ)
+  Future<void> tutorCompleteSession(BookingModel booking) async {
+    final nextCompleted = booking.completedSessions + 1;
 
-    final now = DateTime.now();
-    final pkgId = packageId ?? "pkg_${now.millisecondsSinceEpoch}";
-    final totalOneSession = pricePerHour * hours;
-
-    // gom tất cả ngày học thuộc gói
-    final endDate = startDate.add(Duration(days: weeks * 7));
-    DateTime cursor = startDate;
-    final sessionDates = <DateTime>[];
-
-    while (!cursor.isAfter(endDate)) {
-      if (weekdays.contains(cursor.weekday)) {
-        sessionDates.add(cursor);
-      }
-      cursor = cursor.add(const Duration(days: 1));
-    }
-
-    if (sessionDates.isEmpty) return;
-
-    final totalSessions = sessionDates.length;
-    final futures = <Future<void>>[];
-
-    for (var i = 0; i < sessionDates.length; i++) {
-      final d = sessionDates[i];
-
-      final startAt = DateTime(
-        d.year,
-        d.month,
-        d.day,
-        timeStart.hour,
-        timeStart.minute,
+    if (nextCompleted >= booking.totalSessions) {
+      // Hoàn thành toàn bộ gói
+      await repository.updateStatus(
+        bookingId: booking.id,
+        status: BookingStatus.completed,
       );
-      final endAt = DateTime(
-        d.year,
-        d.month,
-        d.day,
-        timeEnd.hour,
-        timeEnd.minute,
-      );
-
-      final booking = BookingModel(
-        id: '',
-        tutorId: tutorId,
-        tutorName: tutorName,
-        studentId: studentId,
-        studentName: studentName,
-        subject: subject,
-        pricePerHour: pricePerHour,
-        hours: hours,
-        price: totalOneSession,
-        note: note,
-        startAt: startAt,
-        endAt: endAt,
-        status: BookingStatus.requested,
-        paid: false,
-        paymentMethod: null,
-        cancelReason: null,
-        createdAt: now,
-        updatedAt: null,
-        mode: mode,
-        rating: null,
-        review: null,
-        ratedAt: null,
-        packageType: packageType,
-        packageId: pkgId,
-        sessionIndex: i + 1,
-        totalSessions: totalSessions,
-      );
-
-      futures.add(repository.createBooking(booking));
-    }
-
-    await Future.wait(futures);
-  }
-
-  // ================== UPDATE TRẠNG THÁI ==================
-  Future<void> updateBookingStatus(
-      String bookingId,
-      String status, {
-        String? cancelReason,
-      }) async {
-    await repository.updateStatus(
-      bookingId: bookingId,
-      status: status,
-      cancelReason: cancelReason,
-    );
-  }
-
-  /// Cập nhật cả gói theo packageId
-  Future<void> updateBookingStatusGroup(
-      String packageId,
-      String status, {
-        String? cancelReason,
-      }) async {
-    final list =
-    _tutorBookings.where((b) => b.packageId == packageId).toList();
-
-    if (list.isEmpty) return;
-
-    final futures = <Future<void>>[];
-    for (final b in list) {
-      futures.add(
-        repository.updateStatus(
-          bookingId: b.id,
-          status: status,
-          cancelReason: cancelReason,
-        ),
+    } else {
+      await repository.updateProgress(
+        bookingId: booking.id,
+        completedSessions: nextCompleted,
       );
     }
 
-    await Future.wait(futures);
-  }
-
-  // ================== GIA SƯ HOÀN THÀNH/HỦY BUỔI ==================
-
-  // ⭐ GIA SƯ ĐÁNH DẤU HOÀN THÀNH
-  Future<void> tutorCompleteBooking(BookingModel booking) async {
-    // 1. Cập nhật trạng thái booking
-    await repository.updateStatus(
-      bookingId: booking.id,
-      status: BookingStatus.completed,
-    );
-
-    // 2. Tăng thống kê cho gia sư
     await repository.increaseTutorStats(
       tutorId: booking.tutorId,
       studentId: booking.studentId,
     );
-
-    notifyListeners();
   }
 
-  // GIA SƯ HUỶ BUỔI HỌC
+  /// Gia sư hủy booking
   Future<void> tutorCancelBooking(
       BookingModel booking, {
         String? reason,
@@ -272,11 +160,9 @@ class BookingProvider extends ChangeNotifier {
       status: BookingStatus.cancelled,
       cancelReason: reason,
     );
-
-    notifyListeners();
   }
 
-  // ĐÁNH GIÁ
+  // ================= RATING =================
   Future<void> submitRating({
     required BookingModel booking,
     required double rating,
@@ -288,5 +174,13 @@ class BookingProvider extends ChangeNotifier {
       rating: rating,
       review: review,
     );
+  }
+
+  @override
+  void dispose() {
+    _studentSub?.cancel();
+    _tutorSub?.cancel();
+    _adminSub?.cancel();
+    super.dispose();
   }
 }

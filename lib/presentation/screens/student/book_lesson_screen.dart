@@ -20,11 +20,9 @@ ImageProvider? _buildTutorAvatar(String? avatarUrl) {
     if (avatarUrl.startsWith('http')) {
       return NetworkImage(avatarUrl);
     } else {
-      final bytes = base64Decode(avatarUrl);
-      return MemoryImage(bytes);
+      return MemoryImage(base64Decode(avatarUrl));
     }
-  } catch (e) {
-    debugPrint('Tutor avatar decode error (book screen): $e');
+  } catch (_) {
     return null;
   }
 }
@@ -41,15 +39,16 @@ class BookLessonScreen extends StatefulWidget {
 class _BookLessonScreenState extends State<BookLessonScreen> {
   String? _selectedSubject;
   String _mode = 'online';
+
   DateTime _selectedDate = DateTime.now().add(const Duration(days: 1));
   TimeOfDay _start = const TimeOfDay(hour: 19, minute: 0);
   int _durationMinutes = 60;
+
   final TextEditingController _noteCtrl = TextEditingController();
 
-  /// 'single' | '1m' | '3m' | '6m'
+  /// single | 1m | 3m | 6m
   String _packageType = 'single';
 
-  /// Các thứ trong tuần được chọn (1=Mon ... 7=Sun)
   List<int> _selectedWeekdays = [DateTime.monday];
 
   bool _saving = false;
@@ -66,7 +65,7 @@ class _BookLessonScreenState extends State<BookLessonScreen> {
     super.dispose();
   }
 
-  double get hours => _durationMinutes / 60.0;
+  double get hours => _durationMinutes / 60;
 
   int get _weeks {
     switch (_packageType) {
@@ -83,7 +82,6 @@ class _BookLessonScreenState extends State<BookLessonScreen> {
 
   int get _estimatedTotalSessions {
     if (_packageType == 'single') return 1;
-    if (_weeks == 0 || _selectedWeekdays.isEmpty) return 0;
     return _weeks * _selectedWeekdays.length;
   }
 
@@ -92,45 +90,14 @@ class _BookLessonScreenState extends State<BookLessonScreen> {
   double get _packageTotalPrice {
     if (_packageType == 'single') return _singlePrice;
 
-    double discount;
-    switch (_packageType) {
-      case '1m':
-        discount = 0.05;
-        break;
-      case '3m':
-        discount = 0.1;
-        break;
-      case '6m':
-        discount = 0.15;
-        break;
-      default:
-        discount = 0.0;
-    }
-    final raw = _singlePrice * _estimatedTotalSessions;
-    return raw * (1 - discount);
-  }
+    final discount = switch (_packageType) {
+      '1m' => 0.05,
+      '3m' => 0.10,
+      '6m' => 0.15,
+      _ => 0.0,
+    };
 
-  Future<void> _pickDate() async {
-    final d = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 180)),
-      locale: const Locale('vi', 'VN'),
-    );
-    if (d != null) {
-      setState(() => _selectedDate = d);
-    }
-  }
-
-  Future<void> _pickStartTime() async {
-    final t = await showTimePicker(
-      context: context,
-      initialTime: _start,
-    );
-    if (t != null) {
-      setState(() => _start = t);
-    }
+    return _singlePrice * _estimatedTotalSessions * (1 - discount);
   }
 
   DateTime _combine(DateTime d, TimeOfDay t) =>
@@ -139,15 +106,10 @@ class _BookLessonScreenState extends State<BookLessonScreen> {
   Future<void> _submit() async {
     final auth = context.read<AppAuthProvider>();
     final bookingProvider = context.read<BookingProvider>();
-    final student = auth.user!; // 💥 CHẮC CHẮN ĐÃ LOGIN
-
-    final tutor = widget.tutor;
 
     if (_packageType != 'single' && _selectedWeekdays.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Hãy chọn ít nhất một ngày học trong tuần.'),
-        ),
+        const SnackBar(content: Text('Hãy chọn ít nhất một ngày học trong tuần')),
       );
       return;
     }
@@ -158,42 +120,26 @@ class _BookLessonScreenState extends State<BookLessonScreen> {
       final startAt = _combine(_selectedDate, _start);
       final endAt = startAt.add(Duration(minutes: _durationMinutes));
 
-      if (_packageType == 'single') {
-        await bookingProvider.createSingleBooking(
-          tutorId: tutor.uid,
-          tutorName: tutor.name,
-          studentId: student.uid,
-          studentName: student.displayName ?? 'Student',
-          subject: _selectedSubject ?? tutor.subject,
-          pricePerHour: tutor.price,
-          hours: hours,
-          startAt: startAt,
-          endAt: endAt,
-          note: _noteCtrl.text.trim(),
-          mode: _mode,
-        );
-      } else {
-        await bookingProvider.createPackageBookings(
-          tutorId: tutor.uid,
-          tutorName: tutor.name,
-          studentId: student.uid,
-          studentName: student.displayName ?? 'Student',
-          subject: _selectedSubject ?? tutor.subject,
-          pricePerHour: tutor.price,
-          hours: hours,
-          startDate: _selectedDate,
-          timeStart: _start,
-          timeEnd: TimeOfDay(hour: endAt.hour, minute: endAt.minute),
-          packageType: _packageType,
-          weekdays: _selectedWeekdays,
-          note: _noteCtrl.text.trim(),
-          mode: _mode,
-        );
-      }
+      await bookingProvider.createBooking(
+        tutorId: widget.tutor.uid,
+        tutorName: widget.tutor.name,
+        studentId: auth.user!.uid,
+        studentName: auth.user!.displayName ?? 'Student',
+        subject: _selectedSubject ?? widget.tutor.subject,
+        pricePerHour: widget.tutor.price,
+        hours: hours,
+        startAt: startAt,
+        endAt: endAt,
+        note: _noteCtrl.text.trim(),
+        mode: _mode,
+        packageType: _packageType,
+        totalSessions:
+        _packageType == 'single' ? 1 : _estimatedTotalSessions,
+      );
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Đã gửi yêu cầu đặt lịch.')),
+        const SnackBar(content: Text('Đặt lịch thành công')),
       );
       Navigator.pop(context);
     } finally {
@@ -201,35 +147,31 @@ class _BookLessonScreenState extends State<BookLessonScreen> {
     }
   }
 
-
   Widget _weekdayChip(String label, int weekday) {
-    final isSelected = _selectedWeekdays.contains(weekday);
+    final selected = _selectedWeekdays.contains(weekday);
     return GestureDetector(
       onTap: () {
         setState(() {
-          if (isSelected) {
-            _selectedWeekdays.remove(weekday);
-          } else {
-            _selectedWeekdays.add(weekday);
-          }
+          selected
+              ? _selectedWeekdays.remove(weekday)
+              : _selectedWeekdays.add(weekday);
         });
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         margin: const EdgeInsets.only(right: 6, bottom: 6),
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.primaryColor : Colors.white,
+          color: selected ? AppTheme.primaryColor : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color:
-            isSelected ? AppTheme.primaryColor : Colors.grey.shade300,
+            selected ? AppTheme.primaryColor : Colors.grey.shade300,
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected ? Colors.white : AppTheme.primaryColor,
-            fontWeight: FontWeight.w500,
+            color: selected ? Colors.white : AppTheme.primaryColor,
           ),
         ),
       ),
@@ -238,430 +180,137 @@ class _BookLessonScreenState extends State<BookLessonScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final primary = AppTheme.primaryColor;
     final tutor = widget.tutor;
     final df = DateFormat('EEE, dd/MM/yyyy', 'vi_VN');
 
-    final avatarImage = _buildTutorAvatar(tutor.avatarUrl);
-
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: primary,
         title: const Text('Đặt lịch học'),
+        backgroundColor: AppTheme.primaryColor,
       ),
-      backgroundColor: const Color(0xFFF5F7FA),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ===== Header tutor =====
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black12.withOpacity(0.05),
-                    blurRadius: 6,
-                  ),
-                ],
+            // ===== Tutor header =====
+            ListTile(
+              leading: CircleAvatar(
+                backgroundImage: _buildTutorAvatar(tutor.avatarUrl),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              title: Text(tutor.name),
+              subtitle: Text(tutor.subject),
+              trailing: Text(
+                _fmtVnd(tutor.price),
+                style: const TextStyle(
+                    color: Colors.green, fontWeight: FontWeight.bold),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // ===== Package =====
+            RadioListTile(
+              value: 'single',
+              groupValue: _packageType,
+              onChanged: (v) => setState(() => _packageType = v!),
+              title: const Text('1 buổi lẻ'),
+            ),
+            RadioListTile(
+              value: '1m',
+              groupValue: _packageType,
+              onChanged: (v) => setState(() => _packageType = v!),
+              title: const Text('Gói 1 tháng'),
+            ),
+            RadioListTile(
+              value: '3m',
+              groupValue: _packageType,
+              onChanged: (v) => setState(() => _packageType = v!),
+              title: const Text('Gói 3 tháng'),
+            ),
+            RadioListTile(
+              value: '6m',
+              groupValue: _packageType,
+              onChanged: (v) => setState(() => _packageType = v!),
+              title: const Text('Gói 6 tháng'),
+            ),
+
+            if (_packageType != 'single') ...[
+              Wrap(
                 children: [
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 26,
-                        backgroundColor: primary.withOpacity(0.1),
-                        backgroundImage: avatarImage,
-                        child: avatarImage == null
-                            ? Text(
-                          tutor.name.isNotEmpty
-                              ? tutor.name[0].toUpperCase()
-                              : '?',
-                          style: TextStyle(
-                            color: primary,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 20,
-                          ),
-                        )
-                            : null,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              tutor.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              tutor.subject,
-                              style:
-                              const TextStyle(color: Colors.grey),
-                            ),
-                            const SizedBox(height: 6),
-                            Row(
-                              children: [
-                                const Icon(Icons.star,
-                                    size: 16, color: Colors.amber),
-                                const SizedBox(width: 3),
-                                Text(
-                                  tutor.rating.toStringAsFixed(1),
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w600),
-                                ),
-                                const SizedBox(width: 10),
-                                Text(
-                                  "${_fmtVnd(tutor.price)} / giờ",
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.green,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                  _weekdayChip('T2', DateTime.monday),
+                  _weekdayChip('T3', DateTime.tuesday),
+                  _weekdayChip('T4', DateTime.wednesday),
+                  _weekdayChip('T5', DateTime.thursday),
+                  _weekdayChip('T6', DateTime.friday),
+                  _weekdayChip('T7', DateTime.saturday),
+                  _weekdayChip('CN', DateTime.sunday),
                 ],
               ),
-            ),
+              Text('~ $_estimatedTotalSessions buổi'),
+            ],
 
             const SizedBox(height: 16),
 
-            const Text(
-              "Thông tin buổi học / gói học",
-              style:
-              TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 12),
-
-            // Môn học
-            Text("Môn học",
-                style: TextStyle(
-                    color: Colors.grey[700], fontSize: 13)),
-            const SizedBox(height: 4),
-            Container(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-                border:
-                Border.all(color: Colors.grey.shade300),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _selectedSubject,
-                  items: [
-                    DropdownMenuItem(
-                      value: tutor.subject,
-                      child: Text(tutor.subject),
-                    ),
-                  ],
-                  onChanged: (v) =>
-                      setState(() => _selectedSubject = v),
-                ),
+            // ===== Time =====
+            ListTile(
+              title: const Text('Ngày bắt đầu'),
+              subtitle: Text(df.format(_selectedDate)),
+              trailing: TextButton(
+                onPressed: () async {
+                  final d = await showDatePicker(
+                    context: context,
+                    initialDate: _selectedDate,
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime.now().add(const Duration(days: 180)),
+                  );
+                  if (d != null) setState(() => _selectedDate = d);
+                },
+                child: const Text('Chọn'),
               ),
             ),
 
-            const SizedBox(height: 16),
-
-            // Loại đặt lịch
-            Text("Loại đặt lịch",
-                style: TextStyle(
-                    color: Colors.grey[700], fontSize: 13)),
-            const SizedBox(height: 4),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 8, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-                border:
-                Border.all(color: Colors.grey.shade300),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  RadioListTile<String>(
-                    value: 'single',
-                    groupValue: _packageType,
-                    onChanged: (v) =>
-                        setState(() => _packageType = v ?? 'single'),
-                    title: const Text('1 buổi lẻ'),
-                    dense: true,
-                  ),
-                  RadioListTile<String>(
-                    value: '1m',
-                    groupValue: _packageType,
-                    onChanged: (v) =>
-                        setState(() => _packageType = v ?? '1m'),
-                    title: const Text('Gói 1 tháng'),
-                    dense: true,
-                  ),
-                  RadioListTile<String>(
-                    value: '3m',
-                    groupValue: _packageType,
-                    onChanged: (v) =>
-                        setState(() => _packageType = v ?? '3m'),
-                    title: const Text('Gói 3 tháng'),
-                    dense: true,
-                  ),
-                  RadioListTile<String>(
-                    value: '6m',
-                    groupValue: _packageType,
-                    onChanged: (v) =>
-                        setState(() => _packageType = v ?? '6m'),
-                    title: const Text('Gói 6 tháng'),
-                    dense: true,
-                  ),
-
-                  if (_packageType != 'single') ...[
-                    const Divider(),
-                    const Text(
-                      'Chọn các ngày học trong tuần:',
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500),
-                    ),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      children: [
-                        _weekdayChip('T2', DateTime.monday),
-                        _weekdayChip('T3', DateTime.tuesday),
-                        _weekdayChip('T4', DateTime.wednesday),
-                        _weekdayChip('T5', DateTime.thursday),
-                        _weekdayChip('T6', DateTime.friday),
-                        _weekdayChip('T7', DateTime.saturday),
-                        _weekdayChip('CN', DateTime.sunday),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Ước tính ~ $_estimatedTotalSessions buổi',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ],
+            ListTile(
+              title: const Text('Giờ bắt đầu'),
+              subtitle: Text(_start.format(context)),
+              trailing: TextButton(
+                onPressed: () async {
+                  final t = await showTimePicker(
+                    context: context,
+                    initialTime: _start,
+                  );
+                  if (t != null) setState(() => _start = t);
+                },
+                child: const Text('Chọn'),
               ),
             ),
 
-            const SizedBox(height: 16),
-
-            // Hình thức
-            Text("Hình thức học",
-                style: TextStyle(
-                    color: Colors.grey[700], fontSize: 13)),
-            const SizedBox(height: 4),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-                border:
-                Border.all(color: Colors.grey.shade300),
-              ),
-              child: Column(
-                children: [
-                  RadioListTile<String>(
-                    value: 'online',
-                    groupValue: _mode,
-                    onChanged: (v) =>
-                        setState(() => _mode = v ?? 'online'),
-                    title: const Text(
-                        'Online (Google Meet / Zoom)'),
-                    dense: true,
-                  ),
-                  RadioListTile<String>(
-                    value: 'offline_at_student',
-                    groupValue: _mode,
-                    onChanged: (v) => setState(
-                            () => _mode = v ?? 'offline_at_student'),
-                    title: const Text(
-                        'Offline tại nhà học viên'),
-                    dense: true,
-                  ),
-                  RadioListTile<String>(
-                    value: 'offline_at_tutor',
-                    groupValue: _mode,
-                    onChanged: (v) => setState(
-                            () => _mode = v ?? 'offline_at_tutor'),
-                    title: const Text(
-                        'Offline tại nhà gia sư'),
-                    dense: true,
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // Thời gian
-            Text("Thời gian bắt đầu (cho buổi đầu tiên)",
-                style: TextStyle(
-                    color: Colors.grey[700], fontSize: 13)),
-            const SizedBox(height: 4),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 8, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-                border:
-                Border.all(color: Colors.grey.shade300),
-              ),
-              child: Column(
-                children: [
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.event),
-                    title: const Text(
-                        "Ngày học (buổi đầu tiên)"),
-                    subtitle: Text(df.format(_selectedDate)),
-                    trailing: TextButton(
-                      onPressed: _pickDate,
-                      child: const Text("Chọn ngày"),
-                    ),
-                  ),
-                  const Divider(height: 0),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.schedule),
-                    title: const Text("Giờ bắt đầu"),
-                    subtitle: Text(_start.format(context)),
-                    trailing: TextButton(
-                      onPressed: _pickStartTime,
-                      child: const Text("Chọn giờ"),
-                    ),
-                  ),
-                  const Divider(height: 0),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.timelapse),
-                    title: const Text("Thời lượng 1 buổi"),
-                    subtitle: Text("$_durationMinutes phút"),
-                    trailing: DropdownButton<int>(
-                      value: _durationMinutes,
-                      items: const [
-                        DropdownMenuItem(
-                            value: 60,
-                            child: Text("60 phút")),
-                        DropdownMenuItem(
-                            value: 90,
-                            child: Text("90 phút")),
-                        DropdownMenuItem(
-                            value: 120,
-                            child: Text("120 phút")),
-                      ],
-                      onChanged: (v) => setState(
-                              () => _durationMinutes = v ?? 60),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // Ghi chú
-            Text("Ghi chú cho gia sư (tuỳ chọn)",
-                style: TextStyle(
-                    color: Colors.grey[700], fontSize: 13)),
-            const SizedBox(height: 4),
             TextField(
               controller: _noteCtrl,
-              maxLines: 3,
-              decoration: InputDecoration(
-                hintText:
-                'Ví dụ: Ôn lại chương 1, học qua Zoom...',
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(
-                      color: Colors.grey.shade300),
-                ),
+              decoration: const InputDecoration(
+                labelText: 'Ghi chú',
               ),
             ),
 
             const SizedBox(height: 20),
 
-            // Tổng tiền
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                    color: Colors.green.shade100),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.payments_outlined,
-                      color: Colors.green),
-                  const SizedBox(width: 10),
-                  const Text(
-                    "Tổng dự kiến:",
-                    style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600),
-                  ),
-                  const Spacer(),
-                  Text(
-                    _fmtVnd(
-                      _packageType == 'single'
-                          ? _singlePrice
-                          : _packageTotalPrice,
-                    ),
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.green,
-                    ),
-                  ),
-                ],
-              ),
+            // ===== Total =====
+            Text(
+              'Tổng tiền: ${_fmtVnd(_packageType == 'single' ? _singlePrice : _packageTotalPrice)}',
+              style: const TextStyle(
+                  fontSize: 18, fontWeight: FontWeight.bold),
             ),
 
             const SizedBox(height: 20),
 
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: primary,
-                  minimumSize: const Size.fromHeight(48),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-                onPressed: _saving ? null : _submit,
-                icon: const Icon(Icons.check_circle_outline),
-                label: _saving
-                    ? const Text("Đang tạo...")
-                    : const Text(
-                  "Xác nhận đặt lịch",
-                  style: TextStyle(
-                      fontWeight: FontWeight.bold),
-                ),
+            ElevatedButton(
+              onPressed: _saving ? null : _submit,
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size.fromHeight(48),
+                backgroundColor: AppTheme.primaryColor,
               ),
+              child:
+              Text(_saving ? 'Đang tạo...' : 'Xác nhận đặt lịch'),
             ),
           ],
         ),

@@ -113,8 +113,17 @@ class BookingRepository {
       SetOptions(merge: true),
     );
   }
+  Future<void> updateProgress({
+    required String bookingId,
+    required int completedSessions,
+  }) async {
+    await _fs.collection('bookings').doc(bookingId).update({
+      'completedSessions': completedSessions,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
 
-  // ⭐ HÀM MỚI: tăng totalLessons & totalStudents cho gia sư
+  // tăng totalLessons & totalStudents cho gia sư
   Future<void> increaseTutorStats({
     required String tutorId,
     required String studentId,
@@ -158,5 +167,13 @@ class BookingRepository {
         SetOptions(merge: true),
       );
     });
+  }
+  // Lắng realtime toàn bộ bookings (dành cho admin)
+  Stream<List<BookingModel>> streamAllBookings() {
+    return _fs
+        .collection('bookings')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => BookingModel.fromDoc(d)).toList());
   }
 }
